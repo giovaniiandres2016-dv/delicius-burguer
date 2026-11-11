@@ -1,5 +1,5 @@
 // ============================================================================
-// ARCHIVO: src/App.jsx (Lógica de Carrito Protegida e Inmutable)
+// ARCHIVO: src/App.jsx (Lógica de Carrito Protegida e Inmutable + Rutas Ocultas)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -25,7 +25,7 @@ import { crearOrden } from './sdk/vertizzeApi';
 
 export default function App() {
   const [rutaActual, setRutaActual] = useState(window.location.pathname);
-  
+
   const [modoPedido, setModoPedido] = useState(null);
   const [pasoCliente, setPasoCliente] = useState('inicio'); 
   const [carrito, setCarrito] = useState([]);
@@ -96,8 +96,12 @@ export default function App() {
     setPasoCliente('inicio');
   };
 
-  // RUTA: /cocina
-  if (rutaActual.includes('/cocina')) {
+  // =================================================================ayuda===
+  // RUTAS PRIVADAS Y OCULTAS (Modifica estas cadenas de texto por las que prefieras)
+  // ==========================================================================
+
+  // RUTA COCINA SECRETA (Ejemplo: /kds-kchn-x98)
+  if (rutaActual.includes('/kds-kchn-x98')) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
         <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
@@ -109,19 +113,19 @@ export default function App() {
         </div>
         <PantallaCocina />
         <footer className="text-center text-xs text-neutral-500 py-3 mt-auto">
-          Sistema Operado por <span className="font-semibold text-neutral-400">Vertizze</span> © 2026[cite: 16]
+          Sistema Operado por Vertizze © 2026
         </footer>
       </div>
     );
   }
 
-  // RUTA: /domiciliario
-  if (rutaActual.includes('/domiciliario')) {
+  // RUTA DOMICILIARIOS SECRETA (Ejemplo: /domi-dispatch-z77)
+  if (rutaActual.includes('/domi-dispatch-z77')) {
     return <VistaDomiciliario />;
   }
 
-  // RUTA: /admin
-  if (rutaActual.includes('/admin')) {
+  // RUTA ADMIN SECRETA (Ejemplo: /panel-sec-v2026-adm)
+  if (rutaActual.includes('/panel-sec-v2026-adm')) {
     if (!rolActual) {
       return (
         <Login 
@@ -131,12 +135,12 @@ export default function App() {
         />
       );
     }
-
-    // Se eliminó la barra superior y el pie de página para que el Dashboard ocupe toda la vista
     return <DashboardGeneral />;
   }
 
-  // RUTA: Raíz / Cliente (Delicius Burguer)
+  // ==========================================================================
+  // RUTA: Raíz / Cliente (Delicius Burguer) - Todo lo demás redirige al menú
+  // ==========================================================================
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
       {pasoCliente === 'inicio' && (
