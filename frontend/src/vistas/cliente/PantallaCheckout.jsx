@@ -1,9 +1,9 @@
 // ============================================================================
 // ARCHIVO: src/vistas/cliente/PantallaCheckout.jsx
-// DESCRIPCIÓN: Checkout con selector dinámico de zonas de cobertura ocultando precios, con guía y salvedad.
+// DESCRIPCIÓN: Checkout con cierre automático del buscador de zonas al hacer clic afuera.
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   Banknote, 
@@ -38,6 +38,9 @@ export default function PantallaCheckout({
   const [mostrarDropdownZonas, setMostrarDropdownZonas] = useState(false);
   const [cargandoZonas, setCargandoZonas] = useState(false);
 
+  // Referencia para detectar clics fuera del buscador de zonas
+  const dropdownRef = useRef(null);
+
   useEffect(() => {
     if (modoPedido === 'domicilio') {
       async function cargarZonas() {
@@ -49,6 +52,19 @@ export default function PantallaCheckout({
       cargarZonas();
     }
   }, [modoPedido]);
+
+  // Efecto para cerrar el desplegable al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setMostrarDropdownZonas(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Cálculos de Totales
   const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
@@ -204,9 +220,9 @@ export default function PantallaCheckout({
                 </div>
               </div>
 
-              {/* SELECTOR DINÁMICO DE ZONAS PARA DOMICILIO */}
+              {/* SELECTOR DINÁMICO DE ZONAS PARA DOMICILIO (ENVUELTO EN REF) */}
               {modoPedido === 'domicilio' && (
-                <div className="space-y-4 pt-2 border-t border-neutral-800/80">
+                <div className="space-y-4 pt-2 border-t border-neutral-800/80" ref={dropdownRef}>
                   <div className="relative">
                     <label className="block text-xs font-semibold text-amber-400 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5" /> Barrio / Zona de Cobertura *
@@ -251,7 +267,6 @@ export default function PantallaCheckout({
                               className="w-full text-left px-4 py-3 hover:bg-neutral-800 flex justify-between items-center text-xs border-b border-neutral-800/50 last:border-0 cursor-pointer"
                             >
                               <span className="font-semibold text-white">{zona.barrio_zona}</span>
-                              {/* SE ELIMINÓ EL PRECIO DEL DESPLEGABLE PARA QUE EL CLIENTE NO LO VEA */}
                             </button>
                           ))
                         )}
