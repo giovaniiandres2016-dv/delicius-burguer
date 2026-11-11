@@ -383,7 +383,7 @@ export default function DashboardGeneral() {
     }
   };
 
-  // Sincronizar automáticamente o insertar cliente basado en las órdenes
+// Sincronizar automáticamente o insertar cliente basado en las órdenes
   const sincronizarClientesDesdeOrdenes = async (listaOrdenes) => {
     try {
       for (const ord of listaOrdenes) {
@@ -397,7 +397,8 @@ export default function DashboardGeneral() {
             .eq('telefono', telOrd)
             .maybeSingle();
 
-          const dirFormateada = formatearDireccion(ord.direccion || ord.cliente_direccion);
+          // Tomar ubiación_detalle (que es donde se guarda la zona y dirección)
+          const dirFormateada = formatearDireccion(ord.ubicacion_detalle || ord.direccion || ord.cliente_direccion);
 
           if (!existeCli) {
             await supabase.from('clientes').insert([{
@@ -406,6 +407,11 @@ export default function DashboardGeneral() {
               direccion: dirFormateada,
               observaciones: ord.observaciones || 'Registrado automáticamente desde Órdenes'
             }]);
+          } else {
+            // Actualizar la dirección si el cliente ya existe pero hizo un nuevo pedido
+            await supabase.from('clientes')
+              .update({ direccion: dirFormateada })
+              .eq('telefono', telOrd);
           }
         }
       }
@@ -413,6 +419,7 @@ export default function DashboardGeneral() {
       console.error("Error sincronizando clientes:", err.message);
     }
   };
+  
 
   // Cargar datos iniciales y configurar canales en Tiempo Real
   useEffect(() => {
