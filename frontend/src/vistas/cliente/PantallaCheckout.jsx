@@ -1,6 +1,6 @@
 // ============================================================================
 // ARCHIVO: src/vistas/cliente/PantallaCheckout.jsx
-// DESCRIPCIÓN: Checkout con selector dinámico de zonas de cobertura, recargo de domicilio y nota aclaratoria.
+// DESCRIPCIÓN: Checkout con selector dinámico de zonas de cobertura ocultando precios, con guía y salvedad.
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -90,7 +90,7 @@ export default function PantallaCheckout({
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+     
     if (modoPedido === 'domicilio' && !zonaSeleccionada) {
       alert('Por favor selecciona tu Barrio / Zona de cobertura.');
       return;
@@ -127,7 +127,7 @@ export default function PantallaCheckout({
         .single();
 
       if (error) throw error;
-      
+       
       setProcesando(false);
       alConfirmarPedido(data);
 
@@ -140,7 +140,7 @@ export default function PantallaCheckout({
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none pb-12">
-      
+       
       {/* HEADER FIJO */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-900 px-4 sm:px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -170,9 +170,9 @@ export default function PantallaCheckout({
       {/* CUERPO PRINCIPAL */}
       <main className="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 flex-1">
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+           
           <div className="lg:col-span-2 space-y-6">
-            
+             
             {/* 1. Información de Contacto con Validaciones */}
             <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 space-y-4 shadow-md">
               <h2 className="text-base font-extrabold text-white border-b border-neutral-800 pb-3 flex items-center gap-2">
@@ -212,10 +212,15 @@ export default function PantallaCheckout({
                       <MapPin className="w-3.5 h-3.5" /> Barrio / Zona de Cobertura *
                     </label>
 
+                    {/* MENSAJE GUÍA PARA EL CLIENTE */}
+                    <p className="text-xs text-neutral-400 mb-2">
+                      Escribe o busca en la lista el barrio o zona donde te encuentras para calcular el envío:
+                    </p>
+
                     <div className="relative">
                       <input 
                         type="text"
-                        placeholder={cargandoZonas ? "Cargando cobertura..." : "Buscar barrio o zona..."}
+                        placeholder={cargandoZonas ? "Cargando cobertura..." : "Busca tu barrio aquí..."}
                         value={zonaSeleccionada ? zonaSeleccionada.barrio_zona : busquedaZona}
                         onChange={(e) => {
                           setBusquedaZona(e.target.value);
@@ -246,7 +251,7 @@ export default function PantallaCheckout({
                               className="w-full text-left px-4 py-3 hover:bg-neutral-800 flex justify-between items-center text-xs border-b border-neutral-800/50 last:border-0 cursor-pointer"
                             >
                               <span className="font-semibold text-white">{zona.barrio_zona}</span>
-                              <span className="text-amber-400 font-bold">{formatearPrecio(zona.precio_domicilio)}</span>
+                              {/* SE ELIMINÓ EL PRECIO DEL DESPLEGABLE PARA QUE EL CLIENTE NO LO VEA */}
                             </button>
                           ))
                         )}
@@ -265,11 +270,11 @@ export default function PantallaCheckout({
                     />
                   </div>
 
-                  {/* NOTA ACLARATORIA DE PRECIO APROXIMADO */}
+                  {/* NOTA ACLARATORIA DE VARIACIÓN Y DIRECCIÓN */}
                   <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl text-amber-300 text-xs leading-relaxed">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
                     <p>
-                      <strong className="font-bold text-amber-400">Nota:</strong> El precio del domicilio es aproximado según la zona seleccionada. Si la dirección exacta no concuerda con la zona, el excedente deberá asumirse al momento de la entrega.
+                      <strong className="font-bold text-amber-400">Nota importante:</strong> Si la dirección brindada no concuerda con la zona seleccionada o hay alguna variación en la ubicación real, el domiciliario cobrará el valor correspondiente al momento de la entrega.
                     </p>
                   </div>
                 </div>
