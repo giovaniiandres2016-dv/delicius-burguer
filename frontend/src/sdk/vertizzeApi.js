@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // Credenciales corregidas de tu nueva base de datos (Delicius Burguer)
 const SUPABASE_URL = 'https://flirnmtgxfnvtiecbzzm.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_qBVV54zzm1fX2wMg2kAYvA_e2iJrzog'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsaXJubXRneGZudnRpZWNienptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMDQwMDUsImV4cCI6MjEwODg4MDAwNX0.SNP99sljxOyF8id6CjItCm-nKzrmLGYjo-BA83GGXaw'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
