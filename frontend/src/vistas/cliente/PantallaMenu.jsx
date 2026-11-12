@@ -1,6 +1,6 @@
 // ============================================================================
 // ARCHIVO: src/vistas/cliente/PantallaMenu.jsx
-// DESCRIPCIÓN: Pantalla de menú interactiva y responsiva con evento de clic protegido.
+// DESCRIPCIÓN: Pantalla de menú interactiva y responsiva con categoría de Promociones dinámica.
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -71,11 +71,17 @@ export default function PantallaMenu({ modoPedido, alVolverInicio, alIrAlCarrito
         const listaProductos = Array.isArray(datos) ? datos : (datos?.productos || []);
         setProductosMenu(listaProductos);
 
+        // Verificación dinámica de existencia de promociones en la base de datos
+        const hayPromociones = listaProductos.some(producto => {
+          const catProducto = producto.categoria ? producto.categoria.toLowerCase() : '';
+          return producto.en_promocion || producto.enPromocion || catProducto === 'promociones';
+        });
+
         const categoriasUnicas = Array.from(new Set(listaProductos.map(p => p.categoria).filter(Boolean)));
         
         const categoriasFormateadas = [
           { id: 'todos', nombre: 'Todo el Menú', icono: Sparkles },
-          { id: 'promociones', nombre: 'Promociones', icono: Flame },
+          ...(hayPromociones ? [{ id: 'promociones', nombre: 'Promociones', icono: Flame }] : []),
           ...categoriasUnicas
             .filter(cat => cat.toLowerCase() !== 'promociones')
             .map(cat => ({
@@ -90,8 +96,7 @@ export default function PantallaMenu({ modoPedido, alVolverInicio, alIrAlCarrito
         console.error("Error al cargar el menú:", error);
         setProductosMenu([]);
         setCategoriasMenu([
-          { id: 'todos', nombre: 'Todo el Menú', icono: Sparkles },
-          { id: 'promociones', nombre: 'Promociones', icono: Flame }
+          { id: 'todos', nombre: 'Todo el Menú', icono: Sparkles }
         ]);
       } finally {
         setCargando(false);
@@ -154,7 +159,7 @@ export default function PantallaMenu({ modoPedido, alVolverInicio, alIrAlCarrito
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none pb-28">
-      
+       
       {/* HEADER FIJO */}
       <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-900 px-4 sm:px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -182,7 +187,7 @@ export default function PantallaMenu({ modoPedido, alVolverInicio, alIrAlCarrito
 
       {/* CUERPO PRINCIPAL */}
       <main className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 space-y-6">
-        
+         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-extrabold tracking-tight">Nuestro Menú</h2>
@@ -320,7 +325,7 @@ export default function PantallaMenu({ modoPedido, alVolverInicio, alIrAlCarrito
 
       {/* FOOTER / MARCA DE AGUA */}
       <footer className="text-center text-xs text-neutral-500 py-6 mt-auto">
-        Sistema Operado por <span className="font-semibold text-neutral-400">Vertizze</span> © 2026[cite: 16]
+        Sistema Operado por <span className="font-semibold text-neutral-400">Vertizze</span> © 2026
       </footer>
 
       {/* FOOTER FLOTANTE DE CARRITO */}
