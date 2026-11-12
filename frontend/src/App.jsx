@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import Login from './vistas/admin/Login';
 import DashboardGeneral from './vistas/admin/DashboardGeneral';
 
-// Vista de Cocina (KDS) movida a su propia carpeta
+// Vista de Cocina (KDS)
 import PantallaCocina from './vistas/cocina/PantallaCocina';
 
 // Vista de Domiciliarios
@@ -20,8 +20,6 @@ import PantallaMenu from './vistas/cliente/PantallaMenu';
 import PantallaCarrito from './vistas/cliente/PantallaCarrito';
 import PantallaCheckout from './vistas/cliente/PantallaCheckout';
 import PantallaExito from './vistas/cliente/PantallaExito';
-
-import { crearOrden } from './sdk/vertizzeApi';
 
 export default function App() {
   const [rutaActual, setRutaActual] = useState(window.location.pathname);
@@ -96,12 +94,12 @@ export default function App() {
     setPasoCliente('inicio');
   };
 
-  // =================================================================ayuda===
-  // RUTAS PRIVADAS Y OCULTAS (Modifica estas cadenas de texto por las que prefieras)
+  // ==========================================================================
+  // RUTAS PRIVADAS Y OCULTAS (Totalmente aisladas entre sí)
   // ==========================================================================
 
-  // RUTA COCINA SECRETA (Ejemplo: /kds-kchn-x98)
-  if (rutaActual.includes('/kds-kchn-x98')) {
+  // 1. RUTA COCINA SECRETA (KDS): /kds-kchn-x98
+  if (rutaActual === '/kds-kchn-x98' || rutaActual.startsWith('/kds-kchn-x98/')) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
         <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
@@ -113,19 +111,19 @@ export default function App() {
         </div>
         <PantallaCocina />
         <footer className="text-center text-xs text-neutral-500 py-3 mt-auto">
-          Sistema Operado por Vertizze © 2026
+          Sistema Operado por <span className="font-semibold text-neutral-400">Vertizze</span> © 2026
         </footer>
       </div>
     );
   }
 
-  // RUTA DOMICILIARIOS SECRETA (Ejemplo: /domi-dispatch-z77)
-  if (rutaActual.includes('/domi-dispatch-z77')) {
+  // 2. RUTA DOMICILIARIOS SECRETA: /domi-dispatch-z77
+  if (rutaActual === '/domi-dispatch-z77' || rutaActual.startsWith('/domi-dispatch-z77/')) {
     return <VistaDomiciliario />;
   }
 
-  // RUTA ADMIN SECRETA (Ejemplo: /panel-sec-v2026-adm)
-  if (rutaActual.includes('/panel-sec-v2026-adm')) {
+  // 3. RUTA ADMIN SECRETA: /panel-sec-v2026-adm
+  if (rutaActual === '/panel-sec-v2026-adm' || rutaActual.startsWith('/panel-sec-v2026-adm/')) {
     if (!rolActual) {
       return (
         <Login 
@@ -139,7 +137,7 @@ export default function App() {
   }
 
   // ==========================================================================
-  // RUTA: Raíz / Cliente (Delicius Burguer) - Todo lo demás redirige al menú
+  // RUTA: Raíz / Cliente (Delicius Burguer) - Cualquier otra URL cae aquí
   // ==========================================================================
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
