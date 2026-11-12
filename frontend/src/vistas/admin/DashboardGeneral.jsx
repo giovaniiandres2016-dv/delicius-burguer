@@ -854,7 +854,7 @@ const guardarProducto = async (e) => {
       if (formImagenArchivo) {
         const nombreArchivo = `${Date.now()}_${formImagenArchivo.name.replace(/\s+/g, '_')}`;
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('productos')
           .upload(nombreArchivo, formImagenArchivo);
 
@@ -883,13 +883,18 @@ const guardarProducto = async (e) => {
       };
 
       if (modoEdicion && productoActualId) {
-        // CORRECCIÓN CLAVE: Asegurar que se filtra explícitamente por el ID del producto que se está editando
-        const { error } = await supabase
+        // AGREGAMOS .select() PARA VERIFICAR QUE LA FILA REALMENTE SE ACTUALIZÓ
+        const { data, error } = await supabase
           .from('productos')
           .update(datosProducto)
-          .eq('id', Number(productoActualId));
+          .eq('id', productoActualId) // Sin Number() por si el ID es UUID/texto
+          .select();
 
         if (error) throw error;
+
+        if (!data || data.length === 0) {
+          throw new Error("No se pudo actualizar. Es posible que las políticas de seguridad (RLS) de Supabase estén bloqueando la actualización o el ID no exista.");
+        }
       } else {
         datosProducto.disponible = true;
         const { error } = await supabase
@@ -901,7 +906,7 @@ const guardarProducto = async (e) => {
 
       setModalMenuAbierto(false);
       
-      // FORZAR LA RECARGA INMEDIATA DE LA BD PARA REFLEJAR EL CAMBIO AL INSTANTE
+      // FORZAR LA RECARGA INMEDIATA DE LA BD
       await cargarDatosBD();
       
       alert(modoEdicion ? '¡Producto modificado con éxito!' : '¡Producto creado con éxito!');
