@@ -854,21 +854,18 @@ const guardarProducto = async (e) => {
       if (formImagenArchivo) {
         const nombreArchivo = `${Date.now()}_${formImagenArchivo.name.replace(/\s+/g, '_')}`;
         
-        // Intentar subir al Storage de Supabase (Bucket 'productos' o el que tengas configurado)
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('productos')
           .upload(nombreArchivo, formImagenArchivo);
 
         if (uploadError) {
           console.warn("Storage no disponible o error en bucket, usando conversión local segura:", uploadError.message);
-          // Alternativa robusta: Convertir a Base64 si el bucket no está creado aún
           const reader = new FileReader();
           imgUrlFinal = await new Promise((resolve) => {
             reader.onload = (uploadEvent) => resolve(uploadEvent.target.result);
             reader.readAsDataURL(formImagenArchivo);
           });
         } else {
-          // Obtener URL pública del archivo subido
           const { data: publicUrlData } = supabase.storage
             .from('productos')
             .getPublicUrl(nombreArchivo);
@@ -885,11 +882,12 @@ const guardarProducto = async (e) => {
         imagen: imgUrlFinal && imgUrlFinal.trim() !== '' ? imgUrlFinal : null
       };
 
-      if (modoEdicion) {
+      if (modoEdicion && productoActualId) {
+        // CORRECCIÓN CLAVE: Asegurar que se filtra explícitamente por el ID del producto que se está editando
         const { error } = await supabase
           .from('productos')
           .update(datosProducto)
-          .eq('id', productoActualId);
+          .eq('id', Number(productoActualId));
 
         if (error) throw error;
       } else {
@@ -902,7 +900,11 @@ const guardarProducto = async (e) => {
       }
 
       setModalMenuAbierto(false);
-      cargarDatosBD();
+      
+      // FORZAR LA RECARGA INMEDIATA DE LA BD PARA REFLEJAR EL CAMBIO AL INSTANTE
+      await cargarDatosBD();
+      
+      alert(modoEdicion ? '¡Producto modificado con éxito!' : '¡Producto creado con éxito!');
     } catch (error) {
       console.error("Error al guardar el producto:", error.message);
       alert("Hubo un error al guardar el producto: " + error.message);
@@ -910,7 +912,6 @@ const guardarProducto = async (e) => {
       setSubiendoImagen(false);
     }
   };
-
   const cambiarDisponibilidad = async (id, estadoActual) => {
     try {
       const { error } = await supabase.from('productos').update({ disponible: !estadoActual }).eq('id', id);
