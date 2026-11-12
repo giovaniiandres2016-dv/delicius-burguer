@@ -198,6 +198,7 @@ export default function DashboardGeneral() {
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [cargandoMenu, setCargandoMenu] = useState(true);
+  const [busquedaMenu, setBusquedaMenu] = useState(''); // <--- NUEVO ESTADO PARA EL BUSCADOR DEL MENÚ
 
   // Estados para Modales de Menú (Crear / Editar)
   const [modalMenuAbierto, setModalMenuAbierto] = useState(false);
@@ -2983,9 +2984,9 @@ const calcularCostoDomicilio = (o) => {
         );
       }
 
-      case 'menu': {
+case 'menu': {
         const productosFiltrados = productos.filter(p => {
-          const busq = busquedaOrden.toLowerCase();
+          const busq = busquedaMenu.toLowerCase();
           return p.nombre.toLowerCase().includes(busq) || (p.descripcion && p.descripcion.toLowerCase().includes(busq));
         });
 
@@ -2996,23 +2997,39 @@ const calcularCostoDomicilio = (o) => {
                 <h2 className="text-base md:text-lg font-black text-white">Módulo de Menú y Productos</h2>
                 <p className="text-[11px] text-neutral-400 mt-0.5">Gestión completa del catálogo, precios, categorías y disponibilidad.</p>
               </div>
-              <button onClick={abrirModalCrear} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
-                <Plus className="w-3.5 h-3.5" /> Nuevo Producto
-              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* BUSCADOR PARA EVITAR EL SCROLL */}
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar producto en el menú..." 
+                    value={busquedaMenu} 
+                    onChange={(e) => setBusquedaMenu(e.target.value)}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <button onClick={abrirModalCrear} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer shrink-0">
+                  <Plus className="w-3.5 h-3.5" /> Nuevo Producto
+                </button>
+              </div>
             </div>
 
             {cargandoMenu ? (
               <div className="py-20 text-center text-neutral-500 text-xs">Cargando menú...</div>
-            ) : productos.length === 0 ? (
+            ) : productosFiltrados.length === 0 ? (
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center space-y-2 shadow-lg">
                 <div className="w-9 h-9 bg-neutral-950 rounded-xl border border-neutral-800 flex items-center justify-center mx-auto text-neutral-500">
                   <Utensils className="w-4 h-4 text-amber-500" />
                 </div>
-                <h3 className="text-xs font-bold text-white">No hay productos en el menú</h3>
+                <h3 className="text-xs font-bold text-white">No se encontraron productos</h3>
+                <p className="text-[11px] text-neutral-400">Intenta con otro término de búsqueda.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
-                {productos.map(p => (
+                {productosFiltrados.map(p => (
                   <div key={p.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 flex flex-col justify-between gap-2.5 relative overflow-hidden shadow-lg">
                     <div className="flex gap-2.5">
                       <div className="w-14 h-14 bg-neutral-950 rounded-xl border border-neutral-800 flex items-center justify-center shrink-0 overflow-hidden">
