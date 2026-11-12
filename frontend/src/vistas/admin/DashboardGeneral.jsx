@@ -435,7 +435,7 @@ export default function DashboardGeneral() {
       setCargandoDomiciliarios(false);
     }, 5000);
 
-    const canalRealtime = supabase
+const canalRealtime = supabase
       .channel('cambios-vertizze-db')
       .on(
         'postgres_changes',
@@ -447,12 +447,9 @@ export default function DashboardGeneral() {
             );
           } else if (payload.eventType === 'INSERT') {
             setOrdenes(prevOrdenes => [payload.new, ...prevOrdenes]);
-            await sincronizarClientesDesdeOrdenes([payload.new]);
-            cargarDatosBD();
+            await sincronizarClientesDesdeOrdenes([payload.new]); // Solo sincroniza el cliente nuevo
           } else if (payload.eventType === 'DELETE') {
             setOrdenes(prevOrdenes => prevOrdenes.filter(ord => ord.id !== payload.old.id));
-          } else {
-            cargarDatosBD();
           }
         }
       )
@@ -540,9 +537,7 @@ export default function DashboardGeneral() {
       }
       setEgresos(listaEgresosAplanada);
 
-      if (resOrdenes.data && resOrdenes.data.length > 0) {
-        await sincronizarClientesDesdeOrdenes(resOrdenes.data);
-      }
+      // (Línea eliminada: ya no barre todas las órdenes al iniciar para evitar saturación)
 
       if (resCategorias.data && resCategorias.data.length > 0) {
         setFormCategoriaId(String(resCategorias.data[0].id));
