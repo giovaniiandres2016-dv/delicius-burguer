@@ -12,10 +12,14 @@ import {
 import { obtenerMenu, supabase } from '../../sdk/vertizzeApi';
 
 export default function DashboardGeneral({ rolInicial = 'administrador', onCerrarSesion }) {
+  // Leemos la sesión guardada para que no se pierda al recargar la página (F5)
+  const sesionGuardada = JSON.parse(localStorage.getItem('vertizze_sesion') || 'null');
+  const rolEfectivo = (sesionGuardada?.rol || rolInicial || 'administrador').toLowerCase();
+
   const [menuColapsado, setMenuColapsado] = useState(false);
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
-  const [rolUsuario, setRolUsuario] = useState(rolInicial);
-  const [vistaActual, setVistaActual] = useState(rolInicial === 'colaborador' ? 'ordenes' : 'resumen'); 
+  const [rolUsuario, setRolUsuario] = useState(rolEfectivo);
+  const [vistaActual, setVistaActual] = useState(rolEfectivo === 'colaborador' ? 'ordenes' : 'resumen');
 
   // Fecha actual por defecto en formato YYYY-MM-DD
   const fechaHoyStr = new Date().toISOString().split('T')[0];
