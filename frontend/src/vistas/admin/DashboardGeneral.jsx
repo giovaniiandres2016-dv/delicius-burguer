@@ -16,6 +16,8 @@ export default function DashboardGeneral() {
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [vistaActual, setVistaActual] = useState('resumen'); 
 
+  // Estado para el control de roles y permisos
+  const [rolUsuario, setRolUsuario] = useState('administrador'); // 'administrador', 'colaborador', 'cocina'
   // Fecha actual por defecto en formato YYYY-MM-DD
   const fechaHoyStr = new Date().toISOString().split('T')[0];
 
@@ -56,12 +58,55 @@ export default function DashboardGeneral() {
   // Estado para el buscador interno en el selector de órdenes por domiciliario
   const [busquedaOrdenDomi, setBusquedaOrdenDomi] = useState({});
 
+
+  // Filtrar módulos permitidos según el rol activo
+  const obtenerItemsMenu = () => {
+    if (rolUsuario === 'colaborador') {
+      return [
+        { id: 'clientes', label: 'Módulo de Clientes', icon: Users },
+        { id: 'domiciliarios', label: 'Módulo Domiciliarios', icon: Truck },
+        { id: 'pagos', label: 'Control de Pagos', icon: CreditCard },
+        { id: 'ordenes', label: 'Gestión de Órdenes', icon: ClipboardList },
+        { id: 'contabilidad', label: 'Contabilidad', icon: FileSpreadsheet }
+      ];
+    }
+    if (rolUsuario === 'cocina') {
+      return [
+        { id: 'ordenes', label: 'Gestión de Órdenes / KDS', icon: ClipboardList }
+      ];
+    }
+    // Administrador (Acceso Total)
+    return [
+      { id: 'resumen', label: 'Resumen & Analytics', icon: LayoutDashboard },
+      { id: 'egresos', label: 'Egresos y Facturas', icon: Receipt },
+      { id: 'clientes', label: 'Módulo de Clientes', icon: Users },
+      { id: 'domiciliarios', label: 'Módulo Domiciliarios', icon: Truck },
+      { id: 'pagos', label: 'Control de Pagos', icon: CreditCard },
+      { id: 'ordenes', label: 'Gestión de Órdenes', icon: ClipboardList },
+      { id: 'contabilidad', label: 'Contabilidad', icon: FileSpreadsheet },
+      { id: 'menu', label: 'Menú y Productos', icon: Utensils }
+    ];
+  };
+
+  const cambiarRol = (nuevoRol) => {
+    setRolUsuario(nuevoRol);
+    if (nuevoRol === 'colaborador' && ['resumen', 'egresos', 'menu'].includes(vistaActual)) {
+      setVistaActual('ordenes');
+    } else if (nuevoRol === 'cocina') {
+      setVistaActual('ordenes');
+    }
+  };
+
   // Rango de fechas para filtro y exportación de Domiciliarios
   const [fechaInicioDomi, setFechaInicioDomi] = useState(fechaHoyStr);
   const [fechaFinDomi, setFechaFinDomi] = useState(fechaHoyStr);
 
   // Función para exportar domicilios filtrados por fechas a Excel/CSV
   const exportarDomiciliosACSV = () => {
+    if (rolUsuario === 'colaborador') {
+      alert("Acceso denegado: Su rol de Colaborador no tiene permisos para exportar archivos.");
+      return;
+    }
     const ordenesDomicilio = ordenes.filter(o => {
       const esDomi = (o.tipo_servicio || '').toLowerCase().includes('domicilio');
       const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
@@ -1059,7 +1104,11 @@ const guardarProducto = async (e) => {
   };
 
   // REPORTE CSV MEJORADO CON ESTILO HTML + XML (Soporte de Colores Naranja/Blanco Vértizze Order y Columnas Separadas)
-  const exportarACSV = () => {
+const exportarACSV = () => {
+    if (rolUsuario === 'colaborador') {
+      alert("Acceso denegado: Su rol de Colaborador no tiene permisos para exportar archivos.");
+      return;
+    }
     const ordenesFiltradas = ordenes.filter(o => {
       if (!fechaInicio || !fechaFin) return true;
       const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
@@ -1138,7 +1187,11 @@ const guardarProducto = async (e) => {
     document.body.removeChild(link);
   };
 
-  const exportarOrdenesFiltradasACSV = (ordenesFiltradas) => {
+const exportarOrdenesFiltradasACSV = (ordenesFiltradas) => {
+    if (rolUsuario === 'colaborador') {
+      alert("Acceso denegado: Su rol de Colaborador no tiene permisos para exportar archivos.");
+      return;
+    }
     if (ordenesFiltradas.length === 0) {
       alert("No hay órdenes en el filtro actual para exportar.");
       return;
@@ -3284,6 +3337,20 @@ case 'menu': {
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* SELECTOR DE ROL */}
+          <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-800 px-3 py-1 rounded-xl text-xs">
+            <span className="text-neutral-400 font-bold">Rol:</span>
+            <select 
+              value={rolUsuario} 
+              onChange={(e) => cambiarRol(e.target.value)}
+              className="bg-transparent text-amber-400 font-black focus:outline-none cursor-pointer"
+            >
+              <option value="administrador" className="bg-neutral-900 text-white">Administrador (Total)</option>
+              <option value="colaborador" className="bg-neutral-900 text-white">Colaborador (Limitado)</option>
+              <option value="cocina" className="bg-neutral-900 text-white">Cocina (KDS)</option>
+            </select>
+          </div>
+
           <div className="hidden sm:flex items-center gap-1.5 bg-neutral-950 border border-neutral-800 px-3 py-1.5 rounded-xl text-xs text-neutral-300">
             <Store className="w-3.5 h-3.5 text-amber-500" />
             <span className="font-bold">Sede: Bello</span>
@@ -3304,16 +3371,7 @@ case 'menu': {
           </div>
 
           <nav className="space-y-1 flex-1">
-            {[
-              { id: 'resumen', label: 'Resumen & Analytics', icon: LayoutDashboard },
-              { id: 'egresos', label: 'Egresos y Facturas', icon: Receipt },
-              { id: 'clientes', label: 'Módulo de Clientes', icon: Users },
-              { id: 'domiciliarios', label: 'Módulo Domiciliarios', icon: Truck },
-              { id: 'pagos', label: 'Control de Pagos', icon: CreditCard },
-              { id: 'ordenes', label: 'Gestión de Órdenes', icon: ClipboardList },
-              { id: 'contabilidad', label: 'Contabilidad', icon: FileSpreadsheet },
-              { id: 'menu', label: 'Menú y Productos', icon: Utensils }
-            ].map(item => {
+            {obtenerItemsMenu().map(item => {
               const Icono = item.icon;
               const activo = vistaActual === item.id;
               return (
@@ -3348,16 +3406,7 @@ case 'menu': {
                 </button>
               </div>
               <nav className="space-y-1.5 flex-1">
-                {[
-                  { id: 'resumen', label: 'Resumen & Analytics', icon: LayoutDashboard },
-                  { id: 'egresos', label: 'Egresos y Facturas', icon: Receipt },
-                  { id: 'clientes', label: 'Módulo de Clientes', icon: Users },
-                  { id: 'domiciliarios', label: 'Módulo Domiciliarios', icon: Truck },
-                  { id: 'pagos', label: 'Control de Pagos', icon: CreditCard },
-                  { id: 'ordenes', label: 'Gestión de Órdenes', icon: ClipboardList },
-                  { id: 'contabilidad', label: 'Contabilidad', icon: FileSpreadsheet },
-                  { id: 'menu', label: 'Menú y Productos', icon: Utensils }
-                ].map(item => {
+                {obtenerItemsMenu().map(item => {
                   const Icono = item.icon;
                   const activo = vistaActual === item.id;
                   return (
