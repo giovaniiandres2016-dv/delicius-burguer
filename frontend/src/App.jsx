@@ -1,5 +1,5 @@
 // ============================================================================
-// ARCHIVO: src/App.jsx (Lógica de Carrito Protegida e Inmutable + Rutas Ocultas)
+// ARCHIVO: src/App.jsx (Lógica Protegida e Inmutable + Rutas Ocultas Seguras)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -29,26 +29,36 @@ export default function App() {
   const [carrito, setCarrito] = useState([]);
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
-  const [rolActual, setRolActual] = useState(null); 
+  // Estados de autenticación independientes por rol o una sesión general segura
+  const [sesionActiva, setSesionActiva] = useState(false);
+  const [rolSesion, setRolSesion] = useState(null); // 'admin', 'cocina', 'domiciliario'
 
   useEffect(() => {
     const manejarCambioRuta = () => setRutaActual(window.location.pathname);
     window.addEventListener('popstate', manejarCambioRuta);
 
-    const sesionAdmin = localStorage.getItem('sesion_admin');
-    if (sesionAdmin) {
-      setRolActual('admin');
+    // Verificamos si hay una sesión guardada en localStorage al cargar
+    const adminGuardado = localStorage.getItem('sesion_admin');
+    const rolGuardado = localStorage.getItem('rol_vertizze');
+    
+    if (adminGuardado || rolGuardado) {
+      setSesionActiva(true);
+      setRolSesion(rolGuardado || 'admin');
     }
 
     return () => window.removeEventListener('popstate', manejarCambioRuta);
   }, []);
 
-  const cerrarSesionAdmin = () => {
+  const cerrarSesionGeneral = () => {
     localStorage.removeItem('sesion_admin');
-    setRolActual(null);
+    localStorage.removeItem('rol_vertizze');
+    setSesionActiva(false);
+    setRolSesion(null);
+    // Redirige al login de la ruta administrativa o recarga limpiamente
+    window.location.href = window.location.pathname;
   };
 
-  // Manejador inmutable: garantiza sumar estrictamente +1
+  // Manejador inmutable del carrito
   const manejarAgregarAlCarrito = (producto) => {
     setCarrito((carritoActual) => {
       const existe = carritoActual.some(item => item.id === producto.id);
@@ -95,11 +105,22 @@ export default function App() {
   };
 
   // ==========================================================================
-  // RUTAS PRIVADAS Y OCULTAS (Totalmente aisladas entre sí)
+  // RUTAS PRIVADAS Y OCULTAS (Requieren autenticación obligatoria)
   // ==========================================================================
 
   // 1. RUTA COCINA SECRETA (KDS): /kds-kchn-x98
   if (rutaActual === '/kds-kchn-x98' || rutaActual.startsWith('/kds-kchn-x98/')) {
+    if (!sesionActiva || rolSesion !== 'cocina') {
+      return (
+        <Login 
+          alIniciarSesion={() => {
+            localStorage.setItem('rol_vertizze', 'cocina');
+            setRolSesion('cocina');
+            setSesionActiva(true);
+          }} 
+        />
+      );
+    }
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
         <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
@@ -107,7 +128,12 @@ export default function App() {
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Modo Cocina (KDS) Activo
           </span>
-          <span className="text-neutral-400">Pantalla fija de preparación en tiempo real</span>
+          <button 
+            onClick={cerrarSesionGeneral}
+            className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
+          >
+            Cerrar Sesión
+          </button>
         </div>
         <PantallaCocina />
         <footer className="text-center text-xs text-neutral-500 py-3 mt-auto">
@@ -119,25 +145,39 @@ export default function App() {
 
   // 2. RUTA DOMICILIARIOS SECRETA: /domi-dispatch-z77
   if (rutaActual === '/domi-dispatch-z77' || rutaActual.startsWith('/domi-dispatch-z77/')) {
+    if (!sesionActiva) {
+      return (
+        <Login 
+          alIniciarSesion={() => {
+            localStorage.setItem('rol_vertizze', 'domiciliario');
+            setRolSesion('domiciliario');
+            setSesionActiva(true);
+          }} 
+        />
+      );
+    }
     return <VistaDomiciliario />;
   }
 
   // 3. RUTA ADMIN SECRETA: /panel-sec-v2026-adm
   if (rutaActual === '/panel-sec-v2026-adm' || rutaActual.startsWith('/panel-sec-v2026-adm/')) {
-    if (!rolActual) {
+    if (!sesionActiva) {
       return (
         <Login 
-          alIniciarSesion={() => {
-            setRolActual('admin');
+          alIniciarSesion={(rolAsignado = 'admin') => {
+            localStorage.setItem('sesion_admin', 'true');
+            localStorage.setItem('rol_vertizze', rolAsignado);
+            setRolSesion(rolAsignado);
+            setSesionActiva(true);
           }} 
         />
       );
     }
-    return <DashboardGeneral />;
+    return <DashboardGeneral rolInicial={rolSesion || 'administrador'} onCerrarSesion={cerrarSesionGeneral} />;
   }
 
   // ==========================================================================
-  // RUTA: Raíz / Cliente (Delicius Burguer) - Cualquier otra URL cae aquí
+  // RUTA: Raíz / Cliente (Delicius Burguer) - Acceso libre sin login
   // ==========================================================================
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
