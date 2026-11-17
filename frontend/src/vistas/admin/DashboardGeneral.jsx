@@ -14,15 +14,9 @@ import { obtenerMenu, supabase } from '../../sdk/vertizzeApi';
 export default function DashboardGeneral({ rolInicial = 'administrador', onCerrarSesion }) {
   const [menuColapsado, setMenuColapsado] = useState(false);
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
-  
-  // Estado del rol recibido por props al iniciar sesión
   const [rolUsuario, setRolUsuario] = useState(rolInicial);
-  const [vistaActual, setVistaActual] = useState(rolInicial === 'cocina' ? 'ordenes' : 'resumen');
-  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
-  const [vistaActual, setVistaActual] = useState('resumen'); 
+  const [vistaActual, setVistaActual] = useState(rolInicial === 'cocina' ? 'ordenes' : 'resumen'); 
 
-  // Estado para el control de roles y permisos
-  const [rolUsuario, setRolUsuario] = useState('administrador'); // 'administrador', 'colaborador', 'cocina'
   // Fecha actual por defecto en formato YYYY-MM-DD
   const fechaHoyStr = new Date().toISOString().split('T')[0];
 
