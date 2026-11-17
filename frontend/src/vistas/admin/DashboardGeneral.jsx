@@ -3375,10 +3375,14 @@ case 'menu': {
         <div className="pt-2 border-t border-neutral-800">
             <button 
               onClick={() => {
-                if (onCerrarSesion) {
+                // Si la función onCerrarSesion fue pasada desde el componente padre (Login), la ejecuta.
+                if (typeof onCerrarSesion === 'function') {
                   onCerrarSesion();
                 } else {
-                  window.location.reload();
+                  // Si no existe prop padre, limpia el localStorage o token y redirige a la raíz
+                  localStorage.removeItem('token_vertizze');
+                  localStorage.removeItem('rol_vertizze');
+                  window.location.href = '/'; 
                 }
               }} 
               className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
