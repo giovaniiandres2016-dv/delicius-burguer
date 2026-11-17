@@ -15,7 +15,7 @@ export default function DashboardGeneral({ rolInicial = 'administrador', onCerra
   const [menuColapsado, setMenuColapsado] = useState(false);
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [rolUsuario, setRolUsuario] = useState(rolInicial);
-  const [vistaActual, setVistaActual] = useState(rolInicial === 'cocina' ? 'ordenes' : 'resumen'); 
+  const [vistaActual, setVistaActual] = useState(rolInicial === 'colaborador' ? 'ordenes' : 'resumen'); 
 
   // Fecha actual por defecto en formato YYYY-MM-DD
   const fechaHoyStr = new Date().toISOString().split('T')[0];
@@ -58,8 +58,7 @@ export default function DashboardGeneral({ rolInicial = 'administrador', onCerra
   const [busquedaOrdenDomi, setBusquedaOrdenDomi] = useState({});
 
 
-  // Filtrar módulos permitidos según el rol activo
-  const obtenerItemsMenu = () => {
+const obtenerItemsMenu = () => {
     if (rolUsuario === 'colaborador') {
       return [
         { id: 'clientes', label: 'Módulo de Clientes', icon: Users },
@@ -69,12 +68,7 @@ export default function DashboardGeneral({ rolInicial = 'administrador', onCerra
         { id: 'contabilidad', label: 'Contabilidad', icon: FileSpreadsheet }
       ];
     }
-    if (rolUsuario === 'cocina') {
-      return [
-        { id: 'ordenes', label: 'Gestión de Órdenes / KDS', icon: ClipboardList }
-      ];
-    }
-    // Administrador (Acceso Total)
+    // Administrador (Acceso Total - 8 módulos)
     return [
       { id: 'resumen', label: 'Resumen & Analytics', icon: LayoutDashboard },
       { id: 'egresos', label: 'Egresos y Facturas', icon: Receipt },
@@ -87,11 +81,9 @@ export default function DashboardGeneral({ rolInicial = 'administrador', onCerra
     ];
   };
 
-  const cambiarRol = (nuevoRol) => {
+const cambiarRol = (nuevoRol) => {
     setRolUsuario(nuevoRol);
     if (nuevoRol === 'colaborador' && ['resumen', 'egresos', 'menu'].includes(vistaActual)) {
-      setVistaActual('ordenes');
-    } else if (nuevoRol === 'cocina') {
       setVistaActual('ordenes');
     }
   };
