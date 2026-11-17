@@ -32,8 +32,8 @@ export default function Login({ alIniciarSesion }) {
       }
 
       // Si es exitoso, guardamos sesión local y cambiamos de vista
-      localStorage.setItem('sesion_admin', JSON.stringify(data));
-      alIniciarSesion('admin');
+      localStorage.setItem('vertizze_sesion', JSON.stringify(data));
+      alIniciarSesion(data.rol || 'administrador');
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
     } finally {
