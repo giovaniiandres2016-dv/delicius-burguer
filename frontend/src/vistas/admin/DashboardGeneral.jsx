@@ -11,8 +11,13 @@ import {
 } from 'lucide-react';
 import { obtenerMenu, supabase } from '../../sdk/vertizzeApi';
 
-export default function DashboardGeneral() {
+export default function DashboardGeneral({ rolInicial = 'administrador', onCerrarSesion }) {
   const [menuColapsado, setMenuColapsado] = useState(false);
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  
+  // Estado del rol recibido por props al iniciar sesión
+  const [rolUsuario, setRolUsuario] = useState(rolInicial);
+  const [vistaActual, setVistaActual] = useState(rolInicial === 'cocina' ? 'ordenes' : 'resumen');
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
   const [vistaActual, setVistaActual] = useState('resumen'); 
 
@@ -3335,25 +3340,10 @@ case 'menu': {
             </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2.5">
-          {/* SELECTOR DE ROL */}
-          <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-800 px-3 py-1 rounded-xl text-xs">
-            <span className="text-neutral-400 font-bold">Rol:</span>
-            <select 
-              value={rolUsuario} 
-              onChange={(e) => cambiarRol(e.target.value)}
-              className="bg-transparent text-amber-400 font-black focus:outline-none cursor-pointer"
-            >
-              <option value="administrador" className="bg-neutral-900 text-white">Administrador (Total)</option>
-              <option value="colaborador" className="bg-neutral-900 text-white">Colaborador (Limitado)</option>
-              <option value="cocina" className="bg-neutral-900 text-white">Cocina (KDS)</option>
-            </select>
-          </div>
-
+<div className="flex items-center gap-2.5">
           <div className="hidden sm:flex items-center gap-1.5 bg-neutral-950 border border-neutral-800 px-3 py-1.5 rounded-xl text-xs text-neutral-300">
             <Store className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-bold">Sede: Bello</span>
+            <span className="font-bold">Sede: Bello ({capitalizarTexto(rolUsuario)})</span>
           </div>
           <button onClick={() => window.location.reload()} className="p-2 bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-400 hover:text-white transition-all cursor-pointer" title="Actualizar Datos">
             <ExternalLink className="w-4 h-4" />
@@ -3388,8 +3378,17 @@ case 'menu': {
             })}
           </nav>
 
-          <div className="pt-2 border-t border-neutral-800">
-            <button onClick={() => alert('Sesión de administrador activa')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 transition-all cursor-pointer">
+        <div className="pt-2 border-t border-neutral-800">
+            <button 
+              onClick={() => {
+                if (onCerrarSesion) {
+                  onCerrarSesion();
+                } else {
+                  window.location.reload();
+                }
+              }} 
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+            >
               <LogOut className="w-4 h-4 shrink-0" />
               {!menuColapsado && <span>Cerrar Sesión</span>}
             </button>
