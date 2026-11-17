@@ -1,5 +1,5 @@
 // ============================================================================
-// ARCHIVO: src/App.jsx (Lógica Protegida e Inmutable + Rutas Ocultas Seguras)
+// ARCHIVO: src/App.jsx (Enrutador Seguro y Limpio para Vértizze)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -29,15 +29,22 @@ export default function App() {
   const [carrito, setCarrito] = useState([]);
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
-  // Estados de autenticación independientes por rol o una sesión general segura
   const [sesionActiva, setSesionActiva] = useState(false);
   const [rolSesion, setRolSesion] = useState(null); // 'admin', 'cocina', 'domiciliario'
 
   useEffect(() => {
-    const manejarCambioRuta = () => setRutaActual(window.location.pathname);
-    window.addEventListener('popstate', manejarCambioRuta);
+    const actualizarRuta = () => setRutaActual(window.location.pathname);
+    
+    window.addEventListener('popstate', actualizarRuta);
+    
+    // Interceptar cambios de ruta programáticos si los hay
+    const originalPushState = window.history.pushState;
+    window.history.pushState = function(...args) {
+      originalPushState.apply(this, args);
+      actualizarRuta();
+    };
 
-    // Verificamos si hay una sesión guardada en localStorage al cargar
+    // Verificación de sesión al cargar
     const adminGuardado = localStorage.getItem('sesion_admin');
     const rolGuardado = localStorage.getItem('rol_vertizze');
     
@@ -46,7 +53,10 @@ export default function App() {
       setRolSesion(rolGuardado || 'admin');
     }
 
-    return () => window.removeEventListener('popstate', manejarCambioRuta);
+    return () => {
+      window.removeEventListener('popstate', actualizarRuta);
+      window.history.pushState = originalPushState;
+    };
   }, []);
 
   const cerrarSesionGeneral = () => {
@@ -54,19 +64,15 @@ export default function App() {
     localStorage.removeItem('rol_vertizze');
     setSesionActiva(false);
     setRolSesion(null);
-    // Redirige al login de la ruta administrativa o recarga limpiamente
-    window.location.href = window.location.pathname;
+    window.location.href = '/panel-sec-v2026-adm'; // Te devuelve directo al Login del panel
   };
 
-  // Manejador inmutable del carrito
   const manejarAgregarAlCarrito = (producto) => {
     setCarrito((carritoActual) => {
       const existe = carritoActual.some(item => item.id === producto.id);
       if (existe) {
         return carritoActual.map(item =>
-          item.id === producto.id
-            ? { ...item, cantidad: item.cantidad + 1 }
-            : item
+          item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
         );
       }
       return [...carritoActual, { ...producto, cantidad: 1, observacion: '' }];
@@ -79,17 +85,13 @@ export default function App() {
       return;
     }
     setCarrito(carritoActual => 
-      carritoActual.map(item => 
-        item.id === idProducto ? { ...item, cantidad: nuevaCantidad } : item
-      )
+      carritoActual.map(item => item.id === idProducto ? { ...item, cantidad: nuevaCantidad } : item)
     );
   };
 
   const manejarActualizarObservacionItem = (idProducto, nuevaObservacion) => {
     setCarrito(carritoActual => 
-      carritoActual.map(item => 
-        item.id === idProducto ? { ...item, observacion: nuevaObservacion } : item
-      )
+      carritoActual.map(item => item.id === idProducto ? { ...item, observacion: nuevaObservacion } : item)
     );
   };
 
@@ -105,11 +107,11 @@ export default function App() {
   };
 
   // ==========================================================================
-  // RUTAS PRIVADAS Y OCULTAS (Requieren autenticación obligatoria)
+  // RUTAS PRIVADAS Y OCULTAS (Verificadas por pathname exacto)
   // ==========================================================================
 
-  // 1. RUTA COCINA SECRETA (KDS): /kds-kchn-x98
-  if (rutaActual === '/kds-kchn-x98' || rutaActual.startsWith('/kds-kchn-x98/')) {
+  // 1. RUTA COCINA SECRETA (KDS)
+  if (rutaActual.includes('/kds-kchn-x98')) {
     if (!sesionActiva || rolSesion !== 'cocina') {
       return (
         <Login 
@@ -128,23 +130,17 @@ export default function App() {
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Modo Cocina (KDS) Activo
           </span>
-          <button 
-            onClick={cerrarSesionGeneral}
-            className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
-          >
+          <button onClick={cerrarSesionGeneral} className="text-red-400 hover:text-red-300 font-bold cursor-pointer">
             Cerrar Sesión
           </button>
         </div>
         <PantallaCocina />
-        <footer className="text-center text-xs text-neutral-500 py-3 mt-auto">
-          Sistema Operado por <span className="font-semibold text-neutral-400">Vertizze</span> © 2026
-        </footer>
       </div>
     );
   }
 
-  // 2. RUTA DOMICILIARIOS SECRETA: /domi-dispatch-z77
-  if (rutaActual === '/domi-dispatch-z77' || rutaActual.startsWith('/domi-dispatch-z77/')) {
+  // 2. RUTA DOMICILIARIOS SECRETA
+  if (rutaActual.includes('/domi-dispatch-z77')) {
     if (!sesionActiva) {
       return (
         <Login 
@@ -159,12 +155,12 @@ export default function App() {
     return <VistaDomiciliario />;
   }
 
-  // 3. RUTA ADMIN SECRETA: /panel-sec-v2026-adm
-  if (rutaActual === '/panel-sec-v2026-adm' || rutaActual.startsWith('/panel-sec-v2026-adm/')) {
+  // 3. RUTA ADMIN SECRETA
+  if (rutaActual.includes('/panel-sec-v2026-adm')) {
     if (!sesionActiva) {
       return (
         <Login 
-          alIniciarSesion={(rolAsignado = 'admin') => {
+          alIniciarSesion={(rolAsignado = 'administrador') => {
             localStorage.setItem('sesion_admin', 'true');
             localStorage.setItem('rol_vertizze', rolAsignado);
             setRolSesion(rolAsignado);
@@ -177,59 +173,24 @@ export default function App() {
   }
 
   // ==========================================================================
-  // RUTA: Raíz / Cliente (Delicius Burguer) - Acceso libre sin login
+  // RUTA PÚBLICA (Cliente / Delicius Burguer)
   // ==========================================================================
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
       {pasoCliente === 'inicio' && (
-        <PantallaInicio 
-          alSeleccionarModo={(modo) => {
-            setModoPedido(modo);
-            setPasoCliente('menu');
-          }}
-        />
+        <PantallaInicio alSeleccionarModo={(modo) => { setModoPedido(modo); setPasoCliente('menu'); }} />
       )}
-
       {pasoCliente === 'menu' && (
-        <PantallaMenu 
-          modoPedido={modoPedido}
-          alVolverInicio={manejarVolverInicioCliente}
-          alIrAlCarrito={() => setPasoCliente('carrito')}
-          carrito={carrito}
-          alAgregarAlCarrito={manejarAgregarAlCarrito}
-        />
+        <PantallaMenu modoPedido={modoPedido} alVolverInicio={manejarVolverInicioCliente} alIrAlCarrito={() => setPasoCliente('carrito')} carrito={carrito} alAgregarAlCarrito={manejarAgregarAlCarrito} />
       )}
-
       {pasoCliente === 'carrito' && (
-        <PantallaCarrito 
-          carrito={carrito}
-          modoPedido={modoPedido}
-          alVolverAlMenu={() => setPasoCliente('menu')}
-          alActualizarCantidad={manejarActualizarCantidad}
-          alActualizarObservacion={manejarActualizarObservacionItem}
-          alEliminarItem={manejarEliminarItem}
-          alIrAlCheckout={() => setPasoCliente('checkout')}  
-        />
+        <PantallaCarrito carrito={carrito} modoPedido={modoPedido} alVolverAlMenu={() => setPasoCliente('menu')} alActualizarCantidad={manejarActualizarCantidad} alActualizarObservacion={manejarActualizarObservacionItem} alEliminarItem={manejarEliminarItem} alIrAlCheckout={() => setPasoCliente('checkout')} />
       )}
-
       {pasoCliente === 'checkout' && (
-        <PantallaCheckout 
-          carrito={carrito}
-          modoPedido={modoPedido}
-          alVolverAlCarrito={() => setPasoCliente('carrito')}
-          alConfirmarPedido={(ordenCreada) => {
-            setDatosUltimaOrden(ordenCreada);
-            setCarrito([]);
-            setPasoCliente('exito');
-          }}
-        />
+        <PantallaCheckout carrito={carrito} modoPedido={modoPedido} alVolverAlCarrito={() => setPasoCliente('carrito')} alConfirmarPedido={(orden) => { setDatosUltimaOrden(orden); setCarrito([]); setPasoCliente('exito'); }} />
       )}
-
       {pasoCliente === 'exito' && (
-        <PantallaExito 
-          datosOrden={datosUltimaOrden}
-          alVolverInicio={manejarVolverInicioCliente}
-        />
+        <PantallaExito datosOrden={datosUltimaOrden} alVolverInicio={manejarVolverInicioCliente} />
       )}
     </div>
   );
