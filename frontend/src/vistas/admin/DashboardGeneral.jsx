@@ -463,7 +463,17 @@ const cambiarRol = (nuevoRol) => {
   
 
   // Cargar datos iniciales y configurar canales en Tiempo Real
-  useEffect(() => {
+useEffect(() => {
+    const sesion = localStorage.getItem('vertizze_sesion');
+    if (!sesion && !rolInicial) {
+      if (typeof onCerrarSesion === 'function') {
+        onCerrarSesion();
+      } else {
+        window.location.href = '/login';
+      }
+      return;
+    }
+
     cargarDatosBD();
     consultarCodigoDelDia();
 
@@ -1283,7 +1293,13 @@ const calcularCostoDomicilio = (o) => {
   return 0;
 };
 
-  const renderizarModulo = () => {
+ const renderizarModulo = () => {
+    // Bloqueo de seguridad: Si es colaborador y está en una vista prohibida, lo mandamos a órdenes
+    if (rolUsuario === 'colaborador' && ['resumen', 'egresos', 'menu'].includes(vistaActual)) {
+      setVistaActual('ordenes');
+      return null;
+    }
+
     switch (vistaActual) {
       case 'resumen': {
         const ordenesFiltradas = ordenes.filter(o => {
