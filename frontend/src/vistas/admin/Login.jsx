@@ -58,15 +58,18 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      // Validar que el usuario tenga rol de cocina o administrador
+      // Validar que el usuario tenga rol de cocina
       const rolUsuario = (data.rol || '').toLowerCase();
       if (rolUsuario !== 'cocina' && rolUsuario !== 'administrador') {
         throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
       }
 
-      // Guardar sesión y entrar al módulo de cocina
-      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: 'cocina' }));
-      alIniciarSesion('cocina');
+      // Guardar sesión forzando el rol de cocina si el usuario es de cocina
+      const rolFinal = rolUsuario === 'cocina' ? 'cocina' : (data.rol || 'administrador');
+      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolFinal }));
+      localStorage.setItem('rol_vertizze', rolFinal);
+      
+      alIniciarSesion(rolFinal);
     } catch (err) {
       setError(err.message || 'Error al autenticar en cocina');
     } finally {
