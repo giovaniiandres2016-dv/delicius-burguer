@@ -110,19 +110,8 @@ export default function App() {
   // RUTAS PRIVADAS Y OCULTAS (Verificadas por pathname exacto)
   // ==========================================================================
 
-  // 1. RUTA COCINA SECRETA (KDS)
-  if (rutaActual.includes('/kds-kchn-x98')) {
-    if (!sesionActiva || rolSesion !== 'cocina') {
-      return (
-        <Login 
-          alIniciarSesion={() => {
-            localStorage.setItem('rol_vertizze', 'cocina');
-            setRolSesion('cocina');
-            setSesionActiva(true);
-          }} 
-        />
-      );
-    }
+  // 1. RUTA O ESTADO DE COCINA
+  if (sesionActiva && rolSesion === 'cocina') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
         <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
@@ -139,37 +128,23 @@ export default function App() {
     );
   }
 
-  // 2. RUTA DOMICILIARIOS SECRETA
-  if (rutaActual.includes('/domi-dispatch-z77')) {
-    if (!sesionActiva) {
-      return (
-        <Login 
-          alIniciarSesion={() => {
-            localStorage.setItem('rol_vertizze', 'domiciliario');
-            setRolSesion('domiciliario');
-            setSesionActiva(true);
-          }} 
-        />
-      );
-    }
-    return <VistaDomiciliario />;
+  // 2. SI NO HAY SESIÓN ACTIVA, MOSTRAR LOGIN GENERAL
+  if (!sesionActiva) {
+    return (
+      <Login 
+        alIniciarSesion={(rolAsignado = 'administrador') => {
+          const rolNormalizado = rolAsignado.toLowerCase().trim();
+          localStorage.setItem('rol_vertizze', rolNormalizado);
+          setRolSesion(rolNormalizado);
+          setSesionActiva(true);
+        }} 
+      />
+    );
   }
 
-  // 3. RUTA ADMIN SECRETA
-  if (rutaActual.includes('/panel-sec-v2026-adm')) {
-    if (!sesionActiva) {
-      return (
-        <Login 
-          alIniciarSesion={(rolAsignado = 'administrador') => {
-            localStorage.setItem('sesion_admin', 'true');
-            localStorage.setItem('rol_vertizze', rolAsignado);
-            setRolSesion(rolAsignado);
-            setSesionActiva(true);
-          }} 
-        />
-      );
-    }
-    return <DashboardGeneral rolInicial={rolSesion || 'administrador'} onCerrarSesion={cerrarSesionGeneral} />;
+  // 3. SI EL ROL ES ADMINISTRADOR O COLABORADOR, MOSTRAR DASHBOARD
+  if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
+    return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
   }
 
   // ==========================================================================
