@@ -30,27 +30,26 @@ export default function App() {
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
   const [sesionActiva, setSesionActiva] = useState(false);
-  const [rolSesion, setRolSesion] = useState(null); // 'admin', 'cocina', 'domiciliario'
+  const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'domiciliario', 'colaborador'
 
   useEffect(() => {
     const actualizarRuta = () => setRutaActual(window.location.pathname);
     
     window.addEventListener('popstate', actualizarRuta);
     
-    // Interceptar cambios de ruta programáticos si los hay
     const originalPushState = window.history.pushState;
     window.history.pushState = function(...args) {
       originalPushState.apply(this, args);
       actualizarRuta();
     };
 
-    // Verificación de sesión al cargar
-    const adminGuardado = localStorage.getItem('sesion_admin');
-    const rolGuardado = localStorage.getItem('rol_vertizze');
+    // Verificación de sesión al cargar desde localStorage
+    const sesionGuardada = JSON.parse(localStorage.getItem('vertizze_sesion') || 'null');
+    const rolGuardado = localStorage.getItem('rol_vertizze') || sesionGuardada?.rol;
     
-    if (adminGuardado || rolGuardado) {
+    if (sesionGuardada || rolGuardado) {
       setSesionActiva(true);
-      setRolSesion(rolGuardado || 'admin');
+      setRolSesion((rolGuardado || 'administrador').toLowerCase().trim());
     }
 
     return () => {
@@ -60,11 +59,12 @@ export default function App() {
   }, []);
 
   const cerrarSesionGeneral = () => {
+    localStorage.removeItem('vertizze_sesion');
     localStorage.removeItem('sesion_admin');
     localStorage.removeItem('rol_vertizze');
     setSesionActiva(false);
     setRolSesion(null);
-    window.location.href = '/panel-sec-v2026-adm'; // Te devuelve directo al Login del panel
+    window.location.href = '/'; 
   };
 
   const manejarAgregarAlCarrito = (producto) => {
