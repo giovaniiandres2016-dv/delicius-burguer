@@ -107,55 +107,53 @@ export default function App() {
   };
 
   // ==========================================================================
-  // RUTAS PRIVADAS Y OCULTAS (Verificadas por pathname exacto)
+  // ENRUTAMIENTO POR URL (Administración / Cocina)
   // ==========================================================================
+  const ruta = window.location.pathname.toLowerCase();
 
- // 1. SI LA URL ES DE ADMINISTRACIÓN O COCINA, PERMITIR LOGIN / VISTA PROTEGIDA
-  const ruta = window.location.pathname;
+  // Si entras explícitamente por URL a /admin, /cocina o /login
+  if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
+    
+    // Si no hay sesión activa, mostramos el Login
+    if (!sesionActiva) {
+      return (
+        <Login 
+          alIniciarSesion={(rolAsignado = 'administrador') => {
+            const rolNormalizado = rolAsignado.toLowerCase().trim();
+            localStorage.setItem('rol_vertizze', rolNormalizado);
+            setRolSesion(rolNormalizado);
+            setSesionActiva(true);
+          }} 
+        />
+      );
+    }
 
-  // Si estás en la ruta raíz o de cliente, mostrar siempre la vista del cliente (Catálogo / Pedidos)
-  if (ruta === '/' || ruta === '/index.html' || ruta === '/cliente') {
-    return <VistaCliente />; // O el componente principal de pedidos que vea el cliente
-  }
-
-  // 2. SI INTENTA ENTRAR A /admin O /cocina Y NO HAY SESIÓN, MOSTRAR EL LOGIN
-  if (!sesionActiva) {
-    return (
-      <Login 
-        alIniciarSesion={(rolAsignado = 'administrador') => {
-          const rolNormalizado = rolAsignado.toLowerCase().trim();
-          localStorage.setItem('rol_vertizze', rolNormalizado);
-          setRolSesion(rolNormalizado);
-          setSesionActiva(true);
-        }} 
-      />
-    );
-  }
-
-  // 3. SI YA HAY SESIÓN ACTIVA Y ES COCINA
-  if (sesionActiva && rolSesion === 'cocina') {
-    return (
-      <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
-        <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
-          <span className="text-emerald-400 font-bold flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Modo Cocina (KDS) Activo
-          </span>
-          <button onClick={cerrarSesionGeneral} className="text-red-400 hover:text-red-300 font-bold cursor-pointer">
-            Cerrar Sesión
-          </button>
+    // Si hay sesión y es cocina
+    if (rolSesion === 'cocina') {
+      return (
+        <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
+          <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
+            <span className="text-emerald-400 font-bold flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Modo Cocina (KDS) Activo
+            </span>
+            <button onClick={cerrarSesionGeneral} className="text-red-400 hover:text-red-300 font-bold cursor-pointer">
+              Cerrar Sesión
+            </button>
+          </div>
+          <PantallaCocina />
         </div>
-        <PantallaCocina />
-      </div>
-    );
+      );
+    }
+
+    // Si es Administrador o Colaborador
+    if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
+      return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
+    }
   }
 
-  // 4. SI EL ROL ES ADMINISTRADOR O COLABORADOR, MOSTRAR DASHBOARD
-  if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
-    return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
-  }
   // ==========================================================================
-  // RUTA PÚBLICA (Cliente / Delicius Burguer)
+  // RUTA PREDETERMINADA / PÚBLICA (Lo que ve el Cliente en la raíz "/")
   // ==========================================================================
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
