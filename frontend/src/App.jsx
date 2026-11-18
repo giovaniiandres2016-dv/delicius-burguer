@@ -110,7 +110,29 @@ export default function App() {
   // RUTAS PRIVADAS Y OCULTAS (Verificadas por pathname exacto)
   // ==========================================================================
 
-  // 1. RUTA O ESTADO DE COCINA
+ // 1. SI LA URL ES DE ADMINISTRACIÓN O COCINA, PERMITIR LOGIN / VISTA PROTEGIDA
+  const ruta = window.location.pathname;
+
+  // Si estás en la ruta raíz o de cliente, mostrar siempre la vista del cliente (Catálogo / Pedidos)
+  if (ruta === '/' || ruta === '/index.html' || ruta === '/cliente') {
+    return <VistaCliente />; // O el componente principal de pedidos que vea el cliente
+  }
+
+  // 2. SI INTENTA ENTRAR A /admin O /cocina Y NO HAY SESIÓN, MOSTRAR EL LOGIN
+  if (!sesionActiva) {
+    return (
+      <Login 
+        alIniciarSesion={(rolAsignado = 'administrador') => {
+          const rolNormalizado = rolAsignado.toLowerCase().trim();
+          localStorage.setItem('rol_vertizze', rolNormalizado);
+          setRolSesion(rolNormalizado);
+          setSesionActiva(true);
+        }} 
+      />
+    );
+  }
+
+  // 3. SI YA HAY SESIÓN ACTIVA Y ES COCINA
   if (sesionActiva && rolSesion === 'cocina') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
@@ -128,25 +150,10 @@ export default function App() {
     );
   }
 
-  // 2. SI NO HAY SESIÓN ACTIVA, MOSTRAR LOGIN GENERAL
-  if (!sesionActiva) {
-    return (
-      <Login 
-        alIniciarSesion={(rolAsignado = 'administrador') => {
-          const rolNormalizado = rolAsignado.toLowerCase().trim();
-          localStorage.setItem('rol_vertizze', rolNormalizado);
-          setRolSesion(rolNormalizado);
-          setSesionActiva(true);
-        }} 
-      />
-    );
-  }
-
-  // 3. SI EL ROL ES ADMINISTRADOR O COLABORADOR, MOSTRAR DASHBOARD
+  // 4. SI EL ROL ES ADMINISTRADOR O COLABORADOR, MOSTRAR DASHBOARD
   if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
     return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
   }
-
   // ==========================================================================
   // RUTA PÚBLICA (Cliente / Delicius Burguer)
   // ==========================================================================
