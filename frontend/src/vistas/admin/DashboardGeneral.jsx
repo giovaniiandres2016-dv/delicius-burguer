@@ -2243,7 +2243,6 @@ const eliminarZonaCobertura = async (id) => {
                         return esDeDomi && (!fechaInicioDomi || fechaCreacion >= fechaInicioDomi) && (!fechaFinDomi || fechaCreacion <= fechaFinDomi);
                       });
                       const entregas = ordenesDomi.filter(o => o.estado_domicilio === 'entregado').length;
-                      const tarifaGen = entregas * 6000;
                       const estadoDomi = (domi.estado || 'fuera de turno').toLowerCase();
 
                       return (
@@ -2260,10 +2259,9 @@ const eliminarZonaCobertura = async (id) => {
 
                           <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-2 space-y-1 text-[11px]">
                             <div className="flex justify-between"><span className="text-neutral-400">PIN:</span> <span className="font-mono text-amber-400 font-bold">{domi.pin_acceso}</span></div>
-                            <div className="flex justify-between"><span className="text-neutral-400">Entregas:</span> <span className="font-bold text-white">{entregas}</span></div>
-                            <div className="flex justify-between"><span className="text-neutral-400">Tarifa ($6k):</span> <span className="font-black text-emerald-400">$ {tarifaGen.toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-neutral-400">Entregas Exitosas:</span> <span className="font-bold text-white">{entregas}</span></div>
 
-                            {/* Buscador y asignación rápida */}
+                            {/* Buscador y asignación rápida con Zona al lado del cliente */}
                             <div className="pt-1 border-t border-neutral-800 space-y-1">
                               <input 
                                 type="text"
@@ -2273,12 +2271,21 @@ const eliminarZonaCobertura = async (id) => {
                                 className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-[10px] text-white focus:outline-none focus:border-amber-500 font-bold"
                               />
                               <div className="max-h-24 overflow-y-auto space-y-0.5">
-                                {ordenes.filter(o => (o.tipo_servicio || '').toLowerCase().includes('domicilio') && !o.domiciliario_id && (String(o.numero_orden || o.id).toLowerCase().includes((busquedaOrdenDomi[domi.id] || '').toLowerCase()))).slice(0, 4).map(ord => (
-                                  <div key={ord.id} onClick={() => asignarOrdenADomiciliario(ord.id, domi.id)} className="bg-neutral-900 hover:bg-amber-500/10 p-1 rounded cursor-pointer flex justify-between items-center text-[10px]">
-                                    <span className="font-bold text-amber-400">#{ord.numero_orden || ord.id} - {capitalizarTexto(ord.cliente_nombre)}</span>
-                                    <span className="text-[9px] text-neutral-400 underline">Asignar</span>
-                                  </div>
-                                ))}
+                                {ordenes.filter(o => (o.tipo_servicio || '').toLowerCase().includes('domicilio') && !o.domiciliario_id && (String(o.numero_orden || o.id).toLowerCase().includes((busquedaOrdenDomi[domi.id] || '').toLowerCase()))).slice(0, 4).map(ord => {
+                                  const ubicacionOrd = (ord.ubicacion_detalle || ord.direccion || '').toLowerCase();
+                                  const zonaMatch = coberturaZonas.find(z => z.activo && ubicacionOrd.includes(z.barrio_zona.toLowerCase()));
+                                  const nombreZona = zonaMatch ? zonaMatch.barrio_zona : '';
+
+                                  return (
+                                    <div key={ord.id} onClick={() => asignarOrdenADomiciliario(ord.id, domi.id)} className="bg-neutral-900 hover:bg-amber-500/10 p-1 rounded cursor-pointer flex justify-between items-center text-[10px]">
+                                      <span className="font-bold text-amber-400">
+                                        #{ord.numero_orden || ord.id} - {capitalizarTexto(ord.cliente_nombre)}
+                                        {nombreZona && <span className="text-neutral-400 font-normal"> ({capitalizarTexto(nombreZona)})</span>}
+                                      </span>
+                                      <span className="text-[9px] text-neutral-400 underline">Asignar</span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
