@@ -61,6 +61,16 @@ export default function DashboardGeneral({ rolInicial = 'administrador', onCerra
   // Estado para el buscador interno en el selector de órdenes por domiciliario
   const [busquedaOrdenDomi, setBusquedaOrdenDomi] = useState({});
 
+  // Estados para el CRUD de Cobertura de Zonas y Precios
+  const [coberturaZonas, setCoberturaZonas] = useState([]);
+  const [cargandoZonas, setCargandoZonas] = useState(true);
+  const [modalZonaAbierto, setModalZonaAbierto] = useState(false);
+  const [modoEdicionZona, setModoEdicionZona] = useState(false);
+  const [zonaActualId, setZonaActualId] = useState(null);
+  const [formBarrioZona, setFormBarrioZona] = useState('');
+  const [formPrecioZona, setFormPrecioZona] = useState('');
+  const [formActivoZona, setFormActivoZona] = useState(true);
+
 
 const obtenerItemsMenu = () => {
     if (rolUsuario === 'colaborador') {
@@ -537,15 +547,16 @@ const canalRealtime = supabase
     };
   }, []);
 
-  const cargarDatosBD = async () => {
+const cargarDatosBD = async () => {
     try {
-      const [resProductos, resCategorias, resOrdenes, resClientes, resFacturas, resDomiciliarios] = await Promise.all([
+      const [resProductos, resCategorias, resOrdenes, resClientes, resFacturas, resDomiciliarios, resZonas] = await Promise.all([
         supabase.from('productos').select('*').order('id', { ascending: true }),
         supabase.from('categorias').select('*').order('id', { ascending: true }),
         supabase.from('ordenes').select('*').order('id', { ascending: false }),
         supabase.from('clientes').select('*').order('creado_en', { ascending: false }),
         supabase.from('facturas').select('*, detalle_facturas(*)').order('id', { ascending: false }),
-        supabase.from('domiciliarios').select('*').order('id', { ascending: true })
+        supabase.from('domiciliarios').select('*').order('id', { ascending: true }),
+        supabase.from('cobertura_zonas').select('*').order('id', { ascending: true })
       ]);
 
       setProductos(resProductos.data || []);
@@ -553,6 +564,8 @@ const canalRealtime = supabase
       setOrdenes(resOrdenes.data || []);
       setClientes(resClientes.data || []);
       setDomiciliarios(resDomiciliarios.data || []);
+      setCoberturaZonas(resZonas.data || []);
+      setCargandoZonas(false);
 
       const listaEgresosAplanada = [];
       if (resFacturas.data) {
@@ -1283,14 +1296,78 @@ const calcularCostoDomicilio = (o) => {
   const tipoServicio = (o.tipo_servicio || '').toLowerCase();
   if (tipoServicio.includes('domicilio')) {
     const ubicacion = (o.ubicacion_detalle || o.direccion || '').toLowerCase();
-    if (ubicacion.includes('sabaneta') || ubicacion.includes('envigado')) return 8000;
-    if (ubicacion.includes('poblado')) return 7000;
-    if (ubicacion.includes('laureles')) return 6000;
-    if (ubicacion.includes('bello')) return 5000;
-    if (ubicacion.includes('centro')) return 4000;
-    return 5000;
+    
+    // Buscar coincidencia en la tabla cobertura_zonas
+    const zonaMatch = coberturaZonas.find(z => z.activo && ubicacion.includes(z.barrio_zona.toLowerCase()));
+    if (zonaMatch) {
+      return Number(zonaMatch.precio_domicilio || 0);
+    }
+    return 5000; // Valor por defecto si no coincide con ninguna zona registrada
   }
   return 0;
+};
+
+// Funciones CRUD para Zonas y Precios
+const abrirModalCrearZona = () => {
+  setModoEdicionZona(false);
+  setZonaActualId(null);
+  setFormBarrioZona('');
+  setFormPrecioZona('');
+  setFormActivoZona(true);
+  setModalZonaAbierto(true);
+};
+
+const abrirModalEditarZona = (zona) => {
+  setModoEdicionZona(true);
+  setZonaActualId(zona.id);
+  setFormBarrioZona(zona.barrio_zona || '');
+  setFormPrecioZona(zona.precio_domicilio || '');
+  setFormActivoZona(zona.activo ?? true);
+  setModalZonaAbierto(true);
+};
+
+const guardarZonaCobertura = async (e) => {
+  e.preventDefault();
+  if (!formBarrioZona || formPrecioZona === '') {
+    alert("El nombre de la zona/barrio y el precio son obligatorios.");
+    return;
+  }
+
+  const datosZona = {
+    barrio_zona: capitalizarTexto(formBarrioZona),
+    precio_domicilio: Number(formPrecioZona),
+    activo: formActivoZona
+  };
+
+  try {
+    if (modoEdicionZona) {
+      const { error } = await supabase.from('cobertura_zonas').update(datosZona).eq('id', zonaActualId);
+      if (error) throw error;
+      alert("¡Zona actualizada con éxito!");
+    } else {
+      const { error } = await supabase.from('cobertura_zonas').insert([datosZona]);
+      if (error) throw error;
+      alert("¡Zona registrada con éxito!");
+    }
+    setModalZonaAbierto(false);
+    cargarDatosBD();
+  } catch (error) {
+    console.error("Error al guardar zona:", error.message);
+    alert("Error al guardar la zona: " + error.message);
+  }
+};
+
+const eliminarZonaCobertura = async (id) => {
+  if (window.confirm("¿Estás seguro de eliminar esta zona de cobertura?")) {
+    try {
+      const { error } = await supabase.from('cobertura_zonas').delete().eq('id', id);
+      if (error) throw error;
+      cargarDatosBD();
+    } catch (error) {
+      console.error("Error al eliminar zona:", error.message);
+      alert("No se pudo eliminar la zona.");
+    }
+  }
 };
 
  const renderizarModulo = () => {
@@ -2121,272 +2198,224 @@ const calcularCostoDomicilio = (o) => {
           <div className="space-y-3 max-w-full overflow-hidden">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5">
               <div>
-                <h2 className="text-base md:text-lg font-black text-white">Módulo de Domiciliarios & Seguridad (KDS Admin)</h2>
-                <p className="text-[11px] text-neutral-400 mt-0.5">Gestión de repartidores, control estricto de PINs de acceso, disponibilidad en vivo y productividad ($6.000 por envío independiente).</p>
+                <h2 className="text-base md:text-lg font-black text-white">Módulo de Domiciliarios & Zonas de Cobertura</h2>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Gestión de repartidores (tarjetas compactas) y administración de tarifas por barrio o zona.</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                {/* Rango de fechas para el filtrado de entregas por día */}
-                <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 rounded-xl px-2.5 py-1">
-                  <button 
-                    onClick={filtrarHoyDomi}
-                    className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[10px] font-black rounded-lg transition-all cursor-pointer shrink-0"
-                  >
-                    Hoy
-                  </button>
-                  <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0 ml-1" />
-                  <div className="flex items-center gap-1">
-                    <input type="date" value={fechaInicioDomi} onChange={(e) => setFechaInicioDomi(e.target.value)} className="bg-transparent text-[11px] text-white font-bold focus:outline-none cursor-pointer" />
-                    <span className="text-neutral-500 text-[10px]">-</span>
-                    <input type="date" value={fechaFinDomi} onChange={(e) => setFechaFinDomi(e.target.value)} className="bg-transparent text-[11px] text-white font-bold focus:outline-none cursor-pointer" />
-                  </div>
+                <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 rounded-xl px-2 py-1">
+                  <button onClick={filtrarHoyDomi} className="px-2 py-0.5 bg-amber-500 text-neutral-950 text-[10px] font-black rounded-lg cursor-pointer">Hoy</button>
+                  <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                  <input type="date" value={fechaInicioDomi} onChange={(e) => setFechaInicioDomi(e.target.value)} className="bg-transparent text-[11px] text-white font-bold focus:outline-none" />
+                  <span className="text-neutral-500">-</span>
+                  <input type="date" value={fechaFinDomi} onChange={(e) => setFechaFinDomi(e.target.value)} className="bg-transparent text-[11px] text-white font-bold focus:outline-none" />
                 </div>
-
-                {/* Botón de Exportación a Excel */}
-                <button 
-                  onClick={exportarDomiciliosACSV}
-                  className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer shrink-0"
-                >
-                  <Download className="w-3.5 h-3.5" /> Exportar Excel
-                </button>
-
-                <button 
-                  onClick={abrirModalCrearDomiciliario}
-                  className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Registrar Domiciliario
+                <button onClick={exportarDomiciliosACSV} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 cursor-pointer">
+                  <Download className="w-3.5 h-3.5" /> Excel
                 </button>
               </div>
             </div>
 
-            {cargandoDomiciliarios ? (
-              <div className="py-20 text-center text-neutral-500 text-xs">Cargando domiciliarios de forma segura...</div>
-            ) : domiciliarios.length === 0 ? (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center space-y-2 shadow-lg">
-                <div className="w-9 h-9 bg-neutral-950 rounded-xl border border-neutral-800 flex items-center justify-center mx-auto text-amber-500">
-                  <Truck className="w-4 h-4" />
+            {/* DIVISIÓN DE PANTALLA EN 2 COLUMNAS: DOMICILIARIOS (7 cols) Y ZONAS/PRECIOS (5 cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+              
+              {/* COLUMNA 1: DOMICILIARIOS (TARJETAS MÁS PEQUEÑAS Y COMPACTAS) */}
+              <div className="lg:col-span-7 space-y-2.5">
+                <div className="flex justify-between items-center bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-xl">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-amber-500" /> Repartidores Activos ({domiciliarios.length})
+                  </h3>
+                  <button onClick={abrirModalCrearDomiciliario} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-3 h-3" /> Nuevo Domiciliario
+                  </button>
                 </div>
-                <h3 className="text-xs font-bold text-white">No hay domiciliarios registrados</h3>
-                <p className="text-[11px] text-neutral-400 max-w-xs mx-auto">Registra al primer repartidor para habilitar el KDS automático y las asignaciones.</p>
+
+                {cargandoDomiciliarios ? (
+                  <div className="py-10 text-center text-neutral-500 text-xs">Cargando domiciliarios...</div>
+                ) : domiciliarios.length === 0 ? (
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 text-center text-xs text-neutral-400">No hay domiciliarios registrados.</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {domiciliarios.map(domi => {
+                      const ordenesDomi = ordenes.filter(o => {
+                        const esDeDomi = o.domiciliario_id === domi.id;
+                        const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
+                        return esDeDomi && (!fechaInicioDomi || fechaCreacion >= fechaInicioDomi) && (!fechaFinDomi || fechaCreacion <= fechaFinDomi);
+                      });
+                      const entregas = ordenesDomi.filter(o => o.estado_domicilio === 'entregado').length;
+                      const tarifaGen = entregas * 6000;
+                      const estadoDomi = (domi.estado || 'fuera de turno').toLowerCase();
+
+                      return (
+                        <div key={domi.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 flex flex-col justify-between gap-2 shadow-sm text-xs">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-bold text-white text-xs">{capitalizarTexto(domi.nombre)}</h4>
+                              <p className="text-[10px] text-neutral-400">{limpiarTelefono(domi.telefono)}</p>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${estadoDomi === 'disponible' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-neutral-800 text-neutral-400'}`}>
+                              {domi.estado}
+                            </span>
+                          </div>
+
+                          <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-2 space-y-1 text-[11px]">
+                            <div className="flex justify-between"><span className="text-neutral-400">PIN:</span> <span className="font-mono text-amber-400 font-bold">{domi.pin_acceso}</span></div>
+                            <div className="flex justify-between"><span className="text-neutral-400">Entregas:</span> <span className="font-bold text-white">{entregas}</span></div>
+                            <div className="flex justify-between"><span className="text-neutral-400">Tarifa ($6k):</span> <span className="font-black text-emerald-400">$ {tarifaGen.toLocaleString()}</span></div>
+
+                            {/* Buscador y asignación rápida */}
+                            <div className="pt-1 border-t border-neutral-800 space-y-1">
+                              <input 
+                                type="text"
+                                placeholder="Asignar orden..."
+                                value={busquedaOrdenDomi[domi.id] || ''}
+                                onChange={(e) => setBusquedaOrdenDomi(prev => ({ ...prev, [domi.id]: e.target.value }))}
+                                className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-[10px] text-white focus:outline-none focus:border-amber-500 font-bold"
+                              />
+                              <div className="max-h-24 overflow-y-auto space-y-0.5">
+                                {ordenes.filter(o => (o.tipo_servicio || '').toLowerCase().includes('domicilio') && !o.domiciliario_id && (String(o.numero_orden || o.id).toLowerCase().includes((busquedaOrdenDomi[domi.id] || '').toLowerCase()))).slice(0, 4).map(ord => (
+                                  <div key={ord.id} onClick={() => asignarOrdenADomiciliario(ord.id, domi.id)} className="bg-neutral-900 hover:bg-amber-500/10 p-1 rounded cursor-pointer flex justify-between items-center text-[10px]">
+                                    <span className="font-bold text-amber-400">#{ord.numero_orden || ord.id} - {capitalizarTexto(ord.cliente_nombre)}</span>
+                                    <span className="text-[9px] text-neutral-400 underline">Asignar</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-1 border-t border-neutral-800">
+                            <select value={domi.estado || 'fuera de turno'} onChange={(e) => cambiarEstadoDomiciliarioAdmin(domi.id, e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[10px] text-white font-bold cursor-pointer">
+                              <option value="disponible">🟢 Disponible</option>
+                              <option value="en ruta">🛵 En Ruta</option>
+                              <option value="fuera de turno">🔴 Fuera</option>
+                            </select>
+                            <div className="space-x-1">
+                              <button onClick={() => abrirModalEditarDomiciliario(domi)} className="p-1 bg-neutral-800 hover:bg-neutral-700 text-amber-400 rounded" title="Editar"><Edit3 className="w-3 h-3" /></button>
+                              <button onClick={() => eliminarDomiciliario(domi.id)} className="p-1 bg-red-500/10 text-red-400 rounded" title="Bloquear"><Lock className="w-3 h-3" /></button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                {domiciliarios.map(domi => {
-                  // Filtrar entregas por el rango de fechas seleccionado
-                  const ordenesDomi = ordenes.filter(o => {
-                    const esDeDomi = o.domiciliario_id === domi.id;
-                    const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
-                    const coincideFecha = (!fechaInicioDomi || fechaCreacion >= fechaInicioDomi) && (!fechaFinDomi || fechaCreacion <= fechaFinDomi);
-                    return esDeDomi && coincideFecha;
-                  });
 
-                  const entregasRealizadas = ordenesDomi.filter(o => o.estado_domicilio === 'entregado').length;
-                  const totalTarifaGenerada = entregasRealizadas * 6000;
+              {/* COLUMNA 2: CRUD DE ZONAS Y PRECIOS DE DOMICILIO */}
+              <div className="lg:col-span-5 space-y-2.5">
+                <div className="flex justify-between items-center bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-xl">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-amber-500" /> Zonas y Precios ({coberturaZonas.length})
+                  </h3>
+                  <button onClick={abrirModalCrearZona} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-3 h-3" /> Nueva Zona
+                  </button>
+                </div>
 
-                  const estadoDomi = (domi.estado || 'fuera de turno').toLowerCase();
-                  let colorEstado = 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
-                  if (estadoDomi === 'disponible') colorEstado = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                  if (estadoDomi === 'en ruta') colorEstado = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                {cargandoZonas ? (
+                  <div className="py-10 text-center text-neutral-500 text-xs">Cargando zonas de cobertura...</div>
+                ) : coberturaZonas.length === 0 ? (
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 text-center text-xs text-neutral-400">No hay zonas configuradas en `cobertura_zonas`.</div>
+                ) : (
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-2 space-y-2 max-h-[500px] overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-800 text-neutral-400 text-[10px]">
+                          <th className="pb-1.5">Barrio / Zona</th>
+                          <th className="pb-1.5">Precio Envío</th>
+                          <th className="pb-1.5 text-center">Estado</th>
+                          <th className="pb-1.5 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800/60">
+                        {coberturaZonas.map(zona => (
+                          <tr key={zona.id} className="hover:bg-neutral-800/40">
+                            <td className="py-2 font-bold text-white">{capitalizarTexto(zona.barrio_zona)}</td>
+                            <td className="py-2 font-black text-amber-400">$ {Number(zona.precio_domicilio || 0).toLocaleString()}</td>
+                            <td className="py-2 text-center">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${zona.activo ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {zona.activo ? 'Activo' : 'Inactivo'}
+                              </span>
+                            </td>
+                            <td className="py-2 text-right space-x-1">
+                              <button onClick={() => abrirModalEditarZona(zona)} className="p-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded" title="Editar"><Edit3 className="w-3 h-3" /></button>
+                              <button onClick={() => eliminarZonaCobertura(zona.id)} className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded" title="Eliminar"><Trash2 className="w-3 h-3" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
-                  return (
-                    <div key={domi.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 flex flex-col justify-between gap-3 relative overflow-hidden shadow-lg">
-                      <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 to-amber-600"></div>
-                      
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="text-xs font-bold text-white">{capitalizarTexto(domi.nombre)}</h3>
-                            <span className="text-[10px] text-neutral-500 font-mono">#{domi.id}</span>
-                          </div>
-                          <p className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5">
-                            <Phone className="w-3 h-3 text-neutral-500" /> {limpiarTelefono(domi.telefono)}
-                          </p>
-                        </div>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${colorEstado}`}>
-                          {domi.estado}
-                        </span>
-                      </div>
+            </div>
 
-                      <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 space-y-2">
-                        <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-neutral-400">PIN:</span>
-                          <span className="font-mono text-amber-400 font-bold bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
-                            {domi.pin_acceso}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-neutral-400">Entregas Realizadas:</span>
-                          <span className="font-bold text-white">{entregasRealizadas} pedidos</span>
-                        </div>
-                        <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-neutral-400">Tarifa Domicilios ($6k):</span>
-                          <span className="font-black text-emerald-400">$ {totalTarifaGenerada.toLocaleString()}</span>
-                        </div>
-
-                        {/* Selector personalizado con buscador interno y scroll */}
-                        <div className="pt-2 border-t border-neutral-800 space-y-1.5">
-                          <label className="text-[10px] font-bold text-amber-400 block">Asignar Orden de Domicilio:</label>
-                          
-                          {/* Input Buscador Interno */}
-                          <div className="relative">
-                            <Search className="w-3 h-3 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                            <input 
-                              type="text"
-                              placeholder="Buscar orden o cliente..."
-                              value={busquedaOrdenDomi[domi.id] || ''}
-                              onChange={(e) => setBusquedaOrdenDomi(prev => ({ ...prev, [domi.id]: e.target.value }))}
-                              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg pl-7 pr-2 py-1 text-[11px] text-white font-bold focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-
-                          {/* Lista con Scroll Interno y Estilos Vértizze */}
-                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1 bg-neutral-950 border border-neutral-800 rounded-lg p-1">
-                            {(() => {
-                              const textoBusq = (busquedaOrdenDomi[domi.id] || '').toLowerCase();
-                              
-                              // Filtrar: Que sea de domicilio, que NO tenga domiciliario asignado (!o.domiciliario_id), y que coincida con la búsqueda
-                              const ordenesDisponiblesParaAsignar = ordenes.filter(o => {
-                                const esDomi = (o.tipo_servicio || '').toLowerCase().includes('domicilio');
-                                const sinAsignar = !o.domiciliario_id; // No carga órdenes ya asignadas
-                                const numOrd = String(o.numero_orden || o.id).toLowerCase();
-                                const nomCli = String(o.cliente_nombre || '').toLowerCase();
-                                const coincideBusq = numOrd.includes(textoBusq) || nomCli.includes(textoBusq);
-                                
-                                return esDomi && sinAsignar && coincideBusq;
-                              });
-
-                              if (ordenesDisponiblesParaAsignar.length === 0) {
-                                return (
-                                  <div className="py-3 text-center text-[10px] text-neutral-500 italic">
-                                    No hay órdenes sin asignar disponibles.
-                                  </div>
-                                );
-                              }
-
-                              return ordenesDisponiblesParaAsignar.map(ord => (
-                                <div 
-                                  key={ord.id}
-                                  onClick={() => {
-                                    asignarOrdenADomiciliario(ord.id, domi.id);
-                                    // Limpiar busqueda de este domi
-                                    setBusquedaOrdenDomi(prev => ({ ...prev, [domi.id]: '' }));
-                                  }}
-                                  className="w-full text-left bg-neutral-900 hover:bg-amber-500/10 border border-neutral-800 hover:border-amber-500/40 rounded-md p-1.5 transition-all cursor-pointer flex justify-between items-center"
-                                >
-                                  <div>
-                                    <span className="text-[11px] font-bold text-amber-400">#{ord.numero_orden || ord.id}</span>
-                                    <span className="text-[11px] text-white ml-1.5">{capitalizarTexto(ord.cliente_nombre)}</span>
-                                  </div>
-                                  <span className="text-[10px] bg-neutral-950 text-neutral-400 px-1.5 py-0.5 rounded border border-neutral-800">
-                                    Asignar
-                                  </span>
-                                </div>
-                              ));
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 pt-1 border-t border-neutral-800">
-                        <div className="flex items-center gap-1.5">
-                          <label className="text-[10px] font-bold text-neutral-400 shrink-0">Cambiar Estado:</label>
-                          <select 
-                            value={domi.estado || 'fuera de turno'}
-                            onChange={(e) => cambiarEstadoDomiciliarioAdmin(domi.id, e.target.value)}
-                            className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] text-white font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
-                          >
-                            <option value="disponible">🟢 Disponible</option>
-                            <option value="en ruta">🛵 En Ruta</option>
-                            <option value="fuera de turno">🔴 Fuera de Turno</option>
-                          </select>
-                        </div>
-
-                        <div className="flex justify-end gap-1.5 pt-1">
-                          <button 
-                            onClick={() => abrirModalEditarDomiciliario(domi)} 
-                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            <Edit3 className="w-3 h-3 text-amber-400" /> Cambiar PIN
-                          </button>
-                          <button 
-                            onClick={() => eliminarDomiciliario(domi.id)} 
-                            className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            <Lock className="w-3 h-3" /> Bloquear
-                          </button>
-                        </div>
-                      </div>
+            {/* MODAL PARA CREAR / EDITAR ZONA DE COBERTURA */}
+            {modalZonaAbierto && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl relative">
+                  <div className="flex justify-between items-center pb-2 border-b border-neutral-800">
+                    <h3 className="text-xs font-black text-white">{modoEdicionZona ? 'Editar Zona de Cobertura' : 'Nueva Zona de Cobertura'}</h3>
+                    <button onClick={() => setModalZonaAbierto(false)} className="p-1 bg-neutral-950 rounded-lg text-neutral-400 hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+                  </div>
+                  <form onSubmit={guardarZonaCobertura} className="space-y-2.5">
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Barrio o Zona *</label>
+                      <input type="text" required placeholder="Ej. Laureles, Poblado..." value={formBarrioZona} onChange={(e) => setFormBarrioZona(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500" />
                     </div>
-                  );
-                })}
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Precio del Domicilio ($) *</label>
+                      <input type="number" required placeholder="Ej. 6000" value={formPrecioZona} onChange={(e) => setFormPrecioZona(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Estado *</label>
+                      <select value={formActivoZona ? 'true' : 'false'} onChange={(e) => setFormActivoZona(e.target.value === 'true')} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none cursor-pointer">
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                      </select>
+                    </div>
+                    <div className="pt-2 flex gap-2">
+                      <button type="button" onClick={() => setModalZonaAbierto(false)} className="w-1/2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer">Cancelar</button>
+                      <button type="submit" className="w-1/2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black py-2 rounded-xl text-xs shadow-lg shadow-amber-500/20 cursor-pointer">Guardar</button>
+                    </div>
+                  </form>
+                </div>
               </div>
             )}
 
+            {/* MODAL DOMICILIARIO (Existente) */}
             {modalDomiciliarioAbierto && (
               <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-md w-full p-4 space-y-3 shadow-2xl relative">
                   <div className="flex justify-between items-center pb-2 border-b border-neutral-800">
-                    <h3 className="text-xs font-black text-white flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-amber-500" />
-                      {modoEdicionDomiciliario ? 'Editar Repartidor y Credenciales' : 'Registrar Nuevo Domiciliario'}
-                    </h3>
-                    <button onClick={() => setModalDomiciliarioAbierto(false)} className="p-1 bg-neutral-950 rounded-lg text-neutral-400 hover:text-white cursor-pointer">
-                      <X className="w-4 h-4" />
-                    </button>
+                    <h3 className="text-xs font-black text-white">{modoEdicionDomiciliario ? 'Editar Repartidor' : 'Registrar Nuevo Domiciliario'}</h3>
+                    <button onClick={() => setModalDomiciliarioAbierto(false)} className="p-1 bg-neutral-950 rounded-lg text-neutral-400 hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
                   </div>
-
                   <form onSubmit={guardarDomiciliario} className="space-y-2.5">
                     <div>
                       <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Nombre Completo *</label>
-                      <input 
-                        type="text" required placeholder="Ej. Carlos Pérez" 
-                        value={formNombreDomi} 
-                        onChange={(e) => setFormNombreDomi(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500"
-                      />
+                      <input type="text" required value={formNombreDomi} onChange={(e) => setFormNombreDomi(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500" />
                     </div>
-
                     <div>
                       <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Teléfono / WhatsApp *</label>
-                      <input 
-                        type="text" required placeholder="3001234567" 
-                        value={formTelefonoDomi} 
-                        onChange={(e) => setFormTelefonoDomi(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500"
-                      />
+                      <input type="text" required value={formTelefonoDomi} onChange={(e) => setFormTelefonoDomi(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500" />
                     </div>
-
                     <div>
-                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">PIN de Acceso KDS (Mínimo 4 dígitos) *</label>
-                      <input 
-                        type="text" required placeholder="Ej. 1234" maxLength="10"
-                        value={formPinDomi} 
-                        onChange={(e) => setFormPinDomi(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="text-[10px] text-neutral-500 mt-0.5 block">Este PIN lo usará el domiciliario para ingresar a su vista KDS independiente.</span>
+                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">PIN de Acceso KDS (Mín. 4 dígitos) *</label>
+                      <input type="text" required maxLength="10" value={formPinDomi} onChange={(e) => setFormPinDomi(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500" />
                     </div>
-
                     <div>
-                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Estado Operativo Inicial *</label>
-                      <select 
-                        value={formEstadoDomi}
-                        onChange={(e) => setFormEstadoDomi(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
-                      >
+                      <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Estado Operativo *</label>
+                      <select value={formEstadoDomi} onChange={(e) => setFormEstadoDomi(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none cursor-pointer">
                         <option value="disponible">🟢 Disponible</option>
                         <option value="en ruta">🛵 En Ruta</option>
                         <option value="fuera de turno">🔴 Fuera de Turno</option>
                       </select>
                     </div>
-
-                    <div className="pt-2 flex gap-2.5">
-                      <button type="button" onClick={() => setModalDomiciliarioAbierto(false)} className="w-1/2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer">
-                        Cancelar
-                      </button>
-                      <button type="submit" className="w-1/2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black py-2 rounded-xl text-xs shadow-lg shadow-amber-500/20 cursor-pointer">
-                        {modoEdicionDomiciliario ? 'Guardar Cambios' : 'Registrar Domi'}
-                      </button>
+                    <div className="pt-2 flex gap-2">
+                      <button type="button" onClick={() => setModalDomiciliarioAbierto(false)} className="w-1/2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2 rounded-xl text-xs cursor-pointer">Cancelar</button>
+                      <button type="submit" className="w-1/2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black py-2 rounded-xl text-xs shadow-lg shadow-amber-500/20 cursor-pointer">Guardar</button>
                     </div>
                   </form>
                 </div>
@@ -2395,7 +2424,6 @@ const calcularCostoDomicilio = (o) => {
           </div>
         );
       }
-
       case 'pagos': {
         const ordenesPendientesPago = ordenes.filter(o => {
           const estadoPago = o.estado_pago ? o.estado_pago.toLowerCase().trim() : '';
