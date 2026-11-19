@@ -327,21 +327,42 @@ const cambiarRol = (nuevoRol) => {
     return String(itemsRaw);
   };
 
-  // Consultar el código del día activo
+  // Generar PIN aleatorio criptográficamente seguro de 6 dígitos
+  const generarPinSeguro6Digitos = () => {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return String(100000 + (array[0] % 900000));
+  };
+
+  // Consultar el código del día activo y el estado de cierre del día
   const consultarCodigoDelDia = async () => {
     try {
       const hoyStr = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('codigos_cierre_diario')
-        .select('*')
-        .eq('fecha', hoyStr)
-        .maybeSingle();
+
+      const [{ data, error }, { data: cierreHoy }] = await Promise.all([
+        supabase
+          .from('codigos_cierre_diario')
+          .select('*')
+          .eq('fecha', hoyStr)
+          .maybeSingle(),
+        supabase
+          .from('cierres_caja')
+          .select('id, fecha')
+          .eq('fecha', hoyStr)
+          .maybeSingle()
+      ]);
+
+      if (error) throw error;
+
+      if (cierreHoy) {
+        setEstadoCajaCerrada(true);
+      }
 
       if (data) {
         setCodigoActivoHoy(data.codigo);
-        setCodigoUsadoHoy(data.usado);
+        setCodigoUsadoHoy(Boolean(data.usado));
       } else {
-        setCodigoActivoHoy('No generado');
+        setCodigoActivoHoy('Sin código');
         setCodigoUsadoHoy(false);
       }
     } catch (err) {
@@ -349,51 +370,102 @@ const cambiarRol = (nuevoRol) => {
     }
   };
 
-  // Función del Admin para generar/rotar código nuevo
+  // Función exclusiva del Admin para generar, cambiar o rotar el código diario (quemando el anterior)
   const rotarCodigoDelDia = async (codigoPersonalizado = null) => {
-    const codigoAGenerar = codigoPersonalizado || Math.floor(1000 + Math.random() * 9000).toString();
+    if (rolUsuario !== 'administrador') {
+      alert('Acceso denegado: Solo el Administrador puede generar o cambiar códigos de cierre.');
+      return;
+    }
+
+    const limpio = codigoPersonalizado ? String(codigoPersonalizado).trim() : '';
+    if (codigoPersonalizado !== null && !/^\d{4,8}$/.test(limpio)) {
+      alert('El código debe tener entre 4 y 8 dígitos numéricos.');
+      return;
+    }
+
+    const codigoAGenerar = limpio || generarPinSeguro6Digitos();
 
     try {
-      const { error } = await supabase.rpc('generar_o_rotar_codigo_diario', {
+      const hoyStr = new Date().toISOString().split('T')[0];
+
+      // Intenta usar RPC si existe; si no, hace upsert directo quemando código anterior (usado = false para el nuevo)
+      const { error: errRpc } = await supabase.rpc('generar_o_rotar_codigo_diario', {
         nuevo_codigo: codigoAGenerar
       });
 
-      if (error) throw error;
+      if (errRpc) {
+        const { data: existente } = await supabase
+          .from('codigos_cierre_diario')
+          .select('id')
+          .eq('fecha', hoyStr)
+          .maybeSingle();
 
-      alert(`¡Código actualizado con éxito!\nEl nuevo PIN de cierre para hoy es: ${codigoAGenerar}\nEl código anterior ha sido quemado.`);
+        if (existente) {
+          const { error: errUpd } = await supabase
+            .from('codigos_cierre_diario')
+            .update({ codigo: codigoAGenerar, usado: false })
+            .eq('id', existente.id);
+          if (errUpd) throw errUpd;
+        } else {
+          const { error: errIns } = await supabase
+            .from('codigos_cierre_diario')
+            .insert([{ fecha: hoyStr, codigo: codigoAGenerar, usado: false }]);
+          if (errIns) throw errIns;
+        }
+      }
+
       setNuevoCodigoInput('');
-      consultarCodigoDelDia();
+      await consultarCodigoDelDia();
+      alert(`Código de cierre actualizado y anterior invalidado.\nCódigo vigente para hoy: ${codigoAGenerar}`);
     } catch (err) {
       console.error("Error al rotar código:", err.message);
       alert("No se pudo actualizar el código: " + err.message);
     }
   };
 
-  // Confirmar cierre de caja con validación y quema de PIN seguro
+  // Confirmar cierre de caja con validación y quema inmediata del PIN
   const confirmarCierreConPin = async (e) => {
     e.preventDefault();
     setErrorPin('');
 
-    if (!pinCierre || pinCierre.trim().length < 4) {
-      setErrorPin('Ingresa el código diario proporcionado.');
+    const pinLimpio = (pinCierre || '').trim();
+    if (!/^\d{4,8}$/.test(pinLimpio)) {
+      setErrorPin('Ingresa un código numérico válido (4 a 8 dígitos).');
       return;
     }
 
     setValidandoPin(true);
     try {
-      const { data: esValido, error: errRpc } = await supabase.rpc('validar_y_quemar_codigo', {
-        pin_ingresado: pinCierre.trim()
+      const hoyStr = new Date().toISOString().split('T')[0];
+      let esValido = false;
+
+      const { data: dataRpc, error: errRpc } = await supabase.rpc('validar_y_quemar_codigo', {
+        pin_ingresado: pinLimpio
       });
 
-      if (errRpc) throw errRpc;
+      if (!errRpc && dataRpc === true) {
+        esValido = true;
+      } else if (errRpc) {
+        // Respaldo atómico condicionado a usado = false para quemar el código una sola vez
+        const { data: filaQuemada, error: errQuemar } = await supabase
+          .from('codigos_cierre_diario')
+          .update({ usado: true })
+          .eq('fecha', hoyStr)
+          .eq('codigo', pinLimpio)
+          .eq('usado', false)
+          .select()
+          .maybeSingle();
+
+        if (errQuemar) throw errQuemar;
+        esValido = Boolean(filaQuemada);
+      }
 
       if (!esValido) {
-        setErrorPin('Código incorrecto, ya fue utilizado hoy o ha expirado.');
+        setErrorPin('Código incorrecto, ya fue quemado/utilizado o no está activo para hoy.');
         setValidandoPin(false);
         return;
       }
 
-      const hoyStr = new Date().toISOString().split('T')[0];
       const ordenesHoy = ordenes.filter(o => {
         const fechaOrd = o.creado_en ? o.creado_en.split('T')[0] : '';
         return fechaOrd === hoyStr;
@@ -409,26 +481,30 @@ const cambiarRol = (nuevoRol) => {
 
       const totalVentasHoy = totalEfectivoHoy + totalDigitalHoy;
 
-      await supabase.from('cierres_caja').insert([{
+      const { error: errCierre } = await supabase.from('cierres_caja').insert([{
         fecha: hoyStr,
         total_ventas: totalVentasHoy,
         total_efectivo: totalEfectivoHoy,
         total_digital: totalDigitalHoy,
         total_pedidos: ordenesHoy.length,
-        cerrado_por: 'Cajero Autorizado'
+        cerrado_por: sesionGuardada?.usuario || sesionGuardada?.nombre || rolUsuario
       }]);
 
-      exportarACSV();
+      if (errCierre) throw errCierre;
+
+      if (rolUsuario === 'administrador') {
+        exportarACSV();
+      }
 
       setEstadoCajaCerrada(true);
+      setCodigoUsadoHoy(true);
       setModalPinAbierto(false);
       setPinCierre('');
-      consultarCodigoDelDia();
-      alert(`¡Caja cerrada y código quemado con éxito!\nReporte del día generado correctamente.`);
-
+      await consultarCodigoDelDia();
+      alert('Caja cerrada y código quemado con éxito. El código ya no puede volver a usarse.');
     } catch (err) {
       console.error("Error al cerrar caja:", err.message);
-      setErrorPin("Error: " + err.message);
+      setErrorPin("Error al cerrar caja: " + err.message);
     } finally {
       setValidandoPin(false);
     }
@@ -2979,6 +3055,7 @@ const eliminarZonaCobertura = async (id) => {
                   </p>
                 </div>
                 <button 
+                  type="button"
                   onClick={() => { setErrorPin(''); setPinCierre(''); setModalPinAbierto(true); }}
                   disabled={estadoCajaCerrada}
                   className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5"
@@ -2988,6 +3065,62 @@ const eliminarZonaCobertura = async (id) => {
                 </button>
               </div>
             </div>
+
+            {/* PANEL EXCLUSIVO DE ADMINISTRADOR: GESTIÓN DE CÓDIGOS DE UN SOLO USO */}
+            {rolUsuario === 'administrador' && (
+              <div className="bg-neutral-900 border border-amber-500/30 rounded-xl p-3.5 space-y-3 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-white uppercase tracking-wider">Control de Código Diario de Cierre (Solo Admin)</h3>
+                      <p className="text-[10px] text-neutral-400">Cada código es de un solo uso: se quema al cerrar caja o al generar/cambiar uno nuevo.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-neutral-400 uppercase font-bold">PIN Vigente:</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-neutral-950 border border-amber-500/40 font-mono text-sm font-black text-amber-400 tracking-widest">
+                      {codigoActivoHoy}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${codigoUsadoHoy ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>
+                      {codigoUsadoHoy ? 'Quemado / Usado' : 'Activo'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => rotarCodigoDelDia(null)}
+                    className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-2 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Generar Código Automático
+                  </button>
+
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength="8"
+                      placeholder="Nuevo código (4-8 dígitos)..."
+                      value={nuevoCodigoInput}
+                      onChange={(e) => setNuevoCodigoInput(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => rotarCodigoDelDia(nuevoCodigoInput)}
+                      className="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-amber-400 font-black px-3 py-2 rounded-xl text-xs transition-all cursor-pointer shrink-0"
+                    >
+                      Cambiar Código
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 space-y-3 shadow-lg">
               <h3 className="text-xs font-black text-white uppercase tracking-wider">Resumen Diario de Ventas</h3>
