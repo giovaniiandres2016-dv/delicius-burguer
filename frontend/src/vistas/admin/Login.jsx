@@ -23,16 +23,16 @@ export default function Login({ alIniciarSesion }) {
       const { data, error: err } = await supabase
         .from('usuarios_admin')
         .select('*')
-        .eq('usuario', usuario.trim())
+        .ilike('usuario', usuario.trim())
         .eq('password', password.trim())
-        .single();
+        .maybeSingle();
 
       if (err || !data) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      // Guardamos sesión local completa y enviamos rol administrador
       localStorage.setItem('vertizze_sesion', JSON.stringify(data));
+      localStorage.setItem('rol_vertizze', data.rol || 'administrador');
       alIniciarSesion(data.rol || 'administrador');
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
@@ -50,25 +50,23 @@ export default function Login({ alIniciarSesion }) {
       const { data, error: err } = await supabase
         .from('usuarios_admin')
         .select('*')
-        .eq('usuario', usuario.trim())
+        .ilike('usuario', usuario.trim())
         .eq('password', password.trim())
-        .single();
+        .maybeSingle();
 
       if (err || !data) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      // Validar que el usuario tenga rol de cocina
       const rolUsuario = (data.rol || '').toLowerCase();
       if (rolUsuario !== 'cocina' && rolUsuario !== 'administrador') {
         throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
       }
 
-      // Guardar sesión forzando el rol de cocina si el usuario es de cocina
       const rolFinal = rolUsuario === 'cocina' ? 'cocina' : (data.rol || 'administrador');
       localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolFinal }));
       localStorage.setItem('rol_vertizze', rolFinal);
-      
+
       alIniciarSesion(rolFinal);
     } catch (err) {
       setError(err.message || 'Error al autenticar en cocina');
@@ -80,7 +78,7 @@ export default function Login({ alIniciarSesion }) {
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
-        
+
         {/* Cabecera */}
         <div className="text-center space-y-2 mb-8">
           <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400 mx-auto shadow-inner">
@@ -128,9 +126,9 @@ export default function Login({ alIniciarSesion }) {
           <form onSubmit={manejarLoginAdmin} className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Acceso Administrador</h2>
-              <button 
-                type="button" 
-                onClick={() => setModo('seleccion')} 
+              <button
+                type="button"
+                onClick={() => setModo('seleccion')}
                 className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
               >
                 Volver
@@ -186,9 +184,9 @@ export default function Login({ alIniciarSesion }) {
           <form onSubmit={manejarLoginCocina} className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Acceso Módulo de Cocina (KDS)</h2>
-              <button 
-                type="button" 
-                onClick={() => setModo('seleccion')} 
+              <button
+                type="button"
+                onClick={() => setModo('seleccion')}
                 className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
               >
                 Volver
