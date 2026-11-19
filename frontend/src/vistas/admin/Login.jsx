@@ -1,5 +1,5 @@
 // ============================================================================
-// ARCHIVO: src/vistas/Login.jsx
+// ARCHIVO: src/vistas/admin/Login.jsx
 // DESCRIPCIÓN: Pantalla de selección de rol y autenticación por usuario (Admin y Cocina).
 // ============================================================================
 
@@ -31,9 +31,10 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      localStorage.setItem('vertizze_sesion', JSON.stringify(data));
-      localStorage.setItem('rol_vertizze', data.rol || 'administrador');
-      alIniciarSesion(data.rol || 'administrador');
+      const rolNormalizado = (data.rol || 'administrador').toLowerCase().trim();
+      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolNormalizado }));
+      localStorage.setItem('rol_vertizze', rolNormalizado);
+      alIniciarSesion(rolNormalizado);
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
     } finally {
@@ -58,12 +59,12 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      const rolUsuario = (data.rol || '').toLowerCase();
+      const rolUsuario = (data.rol || '').toLowerCase().trim();
       if (rolUsuario !== 'cocina' && rolUsuario !== 'administrador') {
         throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
       }
 
-      const rolFinal = rolUsuario === 'cocina' ? 'cocina' : (data.rol || 'administrador');
+      const rolFinal = rolUsuario === 'cocina' ? 'cocina' : rolUsuario;
       localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolFinal }));
       localStorage.setItem('rol_vertizze', rolFinal);
 
@@ -78,7 +79,6 @@ export default function Login({ alIniciarSesion }) {
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
-
         {/* Cabecera */}
         <div className="text-center space-y-2 mb-8">
           <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400 mx-auto shadow-inner">
@@ -91,7 +91,13 @@ export default function Login({ alIniciarSesion }) {
         {modo === 'seleccion' ? (
           <div className="space-y-4">
             <button
-              onClick={() => { setModo('admin_form'); setUsuario(''); setPassword(''); setError(''); }}
+              type="button"
+              onClick={() => {
+                setModo('admin_form');
+                setUsuario('');
+                setPassword('');
+                setError('');
+              }}
               className="w-full bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-4 rounded-2xl flex items-center justify-between transition-all group cursor-pointer"
             >
               <div className="flex items-center gap-3 text-left">
@@ -107,7 +113,13 @@ export default function Login({ alIniciarSesion }) {
             </button>
 
             <button
-              onClick={() => { setModo('cocina_form'); setUsuario(''); setPassword(''); setError(''); }}
+              type="button"
+              onClick={() => {
+                setModo('cocina_form');
+                setUsuario('');
+                setPassword('');
+                setError('');
+              }}
               className="w-full bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-4 rounded-2xl flex items-center justify-between transition-all group cursor-pointer"
             >
               <div className="flex items-center gap-3 text-left">
@@ -125,7 +137,9 @@ export default function Login({ alIniciarSesion }) {
         ) : modo === 'admin_form' ? (
           <form onSubmit={manejarLoginAdmin} className="space-y-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Acceso Administrador</h2>
+              <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider">
+                Acceso Administrador
+              </h2>
               <button
                 type="button"
                 onClick={() => setModo('seleccion')}
@@ -183,7 +197,9 @@ export default function Login({ alIniciarSesion }) {
         ) : (
           <form onSubmit={manejarLoginCocina} className="space-y-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Acceso Módulo de Cocina (KDS)</h2>
+              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+                Acceso Módulo de Cocina (KDS)
+              </h2>
               <button
                 type="button"
                 onClick={() => setModo('seleccion')}
@@ -239,7 +255,6 @@ export default function Login({ alIniciarSesion }) {
             </button>
           </form>
         )}
-
       </div>
     </div>
   );
