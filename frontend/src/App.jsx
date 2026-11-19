@@ -25,7 +25,7 @@ export default function App() {
   const [rutaActual, setRutaActual] = useState(window.location.pathname);
 
   const [modoPedido, setModoPedido] = useState(null);
-  const [pasoCliente, setPasoCliente] = useState('inicio'); 
+  const [pasoCliente, setPasoCliente] = useState('inicio');
   const [carrito, setCarrito] = useState([]);
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
@@ -34,11 +34,11 @@ export default function App() {
 
   useEffect(() => {
     const actualizarRuta = () => setRutaActual(window.location.pathname);
-    
+
     window.addEventListener('popstate', actualizarRuta);
-    
+
     const originalPushState = window.history.pushState;
-    window.history.pushState = function(...args) {
+    window.history.pushState = function (...args) {
       originalPushState.apply(this, args);
       actualizarRuta();
     };
@@ -46,7 +46,7 @@ export default function App() {
     // Verificación de sesión al cargar desde localStorage
     const sesionGuardada = JSON.parse(localStorage.getItem('vertizze_sesion') || 'null');
     const rolGuardado = localStorage.getItem('rol_vertizze') || sesionGuardada?.rol;
-    
+
     if (sesionGuardada || rolGuardado) {
       setSesionActiva(true);
       setRolSesion((rolGuardado || 'administrador').toLowerCase().trim());
@@ -58,20 +58,25 @@ export default function App() {
     };
   }, []);
 
+  const navegarA = (nuevaRuta) => {
+    window.history.pushState({}, '', nuevaRuta);
+    setRutaActual(nuevaRuta);
+  };
+
   const cerrarSesionGeneral = () => {
     localStorage.removeItem('vertizze_sesion');
     localStorage.removeItem('sesion_admin');
     localStorage.removeItem('rol_vertizze');
     setSesionActiva(false);
     setRolSesion(null);
-    window.location.href = '/'; 
+    navegarA('/login');
   };
 
   const manejarAgregarAlCarrito = (producto) => {
     setCarrito((carritoActual) => {
-      const existe = carritoActual.some(item => item.id === producto.id);
+      const existe = carritoActual.some((item) => item.id === producto.id);
       if (existe) {
-        return carritoActual.map(item =>
+        return carritoActual.map((item) =>
           item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
         );
       }
@@ -84,19 +89,23 @@ export default function App() {
       manejarEliminarItem(idProducto);
       return;
     }
-    setCarrito(carritoActual => 
-      carritoActual.map(item => item.id === idProducto ? { ...item, cantidad: nuevaCantidad } : item)
+    setCarrito((carritoActual) =>
+      carritoActual.map((item) =>
+        item.id === idProducto ? { ...item, cantidad: nuevaCantidad } : item
+      )
     );
   };
 
   const manejarActualizarObservacionItem = (idProducto, nuevaObservacion) => {
-    setCarrito(carritoActual => 
-      carritoActual.map(item => item.id === idProducto ? { ...item, observacion: nuevaObservacion } : item)
+    setCarrito((carritoActual) =>
+      carritoActual.map((item) =>
+        item.id === idProducto ? { ...item, observacion: nuevaObservacion } : item
+      )
     );
   };
 
   const manejarEliminarItem = (idProducto) => {
-    setCarrito(carritoActual => carritoActual.filter(item => item.id !== idProducto));
+    setCarrito((carritoActual) => carritoActual.filter((item) => item.id !== idProducto));
   };
 
   const manejarVolverInicioCliente = () => {
@@ -107,28 +116,32 @@ export default function App() {
   };
 
   // ==========================================================================
-  // ENRUTAMIENTO POR URL (Administración / Cocina)
+  // ENRUTAMIENTO POR URL (Administración / Cocina / Domiciliario / Login)
   // ==========================================================================
-  const ruta = window.location.pathname.toLowerCase();
+  const ruta = (rutaActual || window.location.pathname).toLowerCase();
 
-  // Si entras explícitamente por URL a /admin, /cocina o /login
   if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
-    
-    // Si no hay sesión activa, mostramos el Login
     if (!sesionActiva) {
       return (
-        <Login 
+        <Login
           alIniciarSesion={(rolAsignado = 'administrador') => {
             const rolNormalizado = rolAsignado.toLowerCase().trim();
             localStorage.setItem('rol_vertizze', rolNormalizado);
             setRolSesion(rolNormalizado);
             setSesionActiva(true);
-          }} 
+            if (rolNormalizado === 'cocina' && !ruta.includes('/cocina')) {
+              navegarA('/cocina');
+            } else if (
+              (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') &&
+              !ruta.includes('/admin')
+            ) {
+              navegarA('/admin');
+            }
+          }}
         />
       );
     }
 
-    // Si hay sesión y es cocina
     if (rolSesion === 'cocina') {
       return (
         <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
@@ -137,7 +150,11 @@ export default function App() {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               Modo Cocina (KDS) Activo
             </span>
-            <button onClick={cerrarSesionGeneral} className="text-red-400 hover:text-red-300 font-bold cursor-pointer">
+            <button
+              type="button"
+              onClick={cerrarSesionGeneral}
+              className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
+            >
               Cerrar Sesión
             </button>
           </div>
@@ -146,7 +163,6 @@ export default function App() {
       );
     }
 
-    // Si es Administrador o Colaborador
     if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
       return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
     }
@@ -158,16 +174,44 @@ export default function App() {
   return (
     <div className="relative min-h-screen bg-neutral-950 text-white">
       {pasoCliente === 'inicio' && (
-        <PantallaInicio alSeleccionarModo={(modo) => { setModoPedido(modo); setPasoCliente('menu'); }} />
+        <PantallaInicio
+          alSeleccionarModo={(modo) => {
+            setModoPedido(modo);
+            setPasoCliente('menu');
+          }}
+        />
       )}
       {pasoCliente === 'menu' && (
-        <PantallaMenu modoPedido={modoPedido} alVolverInicio={manejarVolverInicioCliente} alIrAlCarrito={() => setPasoCliente('carrito')} carrito={carrito} alAgregarAlCarrito={manejarAgregarAlCarrito} />
+        <PantallaMenu
+          modoPedido={modoPedido}
+          alVolverInicio={manejarVolverInicioCliente}
+          alIrAlCarrito={() => setPasoCliente('carrito')}
+          carrito={carrito}
+          alAgregarAlCarrito={manejarAgregarAlCarrito}
+        />
       )}
       {pasoCliente === 'carrito' && (
-        <PantallaCarrito carrito={carrito} modoPedido={modoPedido} alVolverAlMenu={() => setPasoCliente('menu')} alActualizarCantidad={manejarActualizarCantidad} alActualizarObservacion={manejarActualizarObservacionItem} alEliminarItem={manejarEliminarItem} alIrAlCheckout={() => setPasoCliente('checkout')} />
+        <PantallaCarrito
+          carrito={carrito}
+          modoPedido={modoPedido}
+          alVolverAlMenu={() => setPasoCliente('menu')}
+          alActualizarCantidad={manejarActualizarCantidad}
+          alActualizarObservacion={manejarActualizarObservacionItem}
+          alEliminarItem={manejarEliminarItem}
+          alIrAlCheckout={() => setPasoCliente('checkout')}
+        />
       )}
       {pasoCliente === 'checkout' && (
-        <PantallaCheckout carrito={carrito} modoPedido={modoPedido} alVolverAlCarrito={() => setPasoCliente('carrito')} alConfirmarPedido={(orden) => { setDatosUltimaOrden(orden); setCarrito([]); setPasoCliente('exito'); }} />
+        <PantallaCheckout
+          carrito={carrito}
+          modoPedido={modoPedido}
+          alVolverAlCarrito={() => setPasoCliente('carrito')}
+          alConfirmarPedido={(orden) => {
+            setDatosUltimaOrden(orden);
+            setCarrito([]);
+            setPasoCliente('exito');
+          }}
+        />
       )}
       {pasoCliente === 'exito' && (
         <PantallaExito datosOrden={datosUltimaOrden} alVolverInicio={manejarVolverInicioCliente} />
