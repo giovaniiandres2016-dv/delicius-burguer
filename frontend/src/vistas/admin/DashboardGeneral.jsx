@@ -502,9 +502,7 @@ const cambiarRol = (nuevoRol) => {
 
       if (errCierre) throw errCierre;
 
-      if (rolUsuario === 'administrador') {
-        exportarACSV();
-      }
+      exportarVentasDiaACSV(hoyStr);
 
       setEstadoCajaCerrada(true);
       setCodigoUsadoHoy(true);
@@ -1205,6 +1203,85 @@ const guardarProducto = async (e) => {
       console.error("Error al actualizar la orden:", error.message);
       alert("Hubo un error al guardar los cambios: " + error.message);
     }
+  };
+
+  const exportarVentasDiaACSV = (fechaDia) => {
+    const fechaObjetivo = fechaDia || obtenerFechaLocalStr();
+    const ordenesDelDia = ordenes.filter(o => {
+      const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
+      return fechaCreacion === fechaObjetivo;
+    });
+
+    if (ordenesDelDia.length === 0) {
+      alert(`Caja cerrada, pero no hay órdenes registradas en la fecha ${fechaObjetivo} para exportar.`);
+      return;
+    }
+
+    let contenidoTablaHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 11pt; }
+          th { background-color: #F97316; color: #FFFFFF; font-weight: bold; text-align: center; padding: 10px; border: 1px solid #C2410C; }
+          td { padding: 8px; border: 1px solid #E5E7EB; text-align: left; vertical-align: middle; }
+          tr:nth-child(even) { background-color: #FFF7ED; }
+          .titulo { font-size: 16pt; font-weight: bold; color: #C2410C; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="titulo">CIERRE DE CAJA Y VENTAS DEL DÍA - VÉRTIZZE ORDER</div>
+        <p><b>Fecha de Cierre:</b> ${fechaObjetivo}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nro Orden</th>
+              <th>Tipo Servicio</th>
+              <th>Cliente</th>
+              <th>Ítems</th>
+              <th>Subtotal</th>
+              <th>Estado Pago</th>
+              <th>Método Pago</th>
+              <th>Estado Pedido</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    ordenesDelDia.forEach(o => {
+      contenidoTablaHtml += `
+        <tr>
+          <td>${o.id}</td>
+          <td>${o.numero_orden || ''}</td>
+          <td>${capitalizarTexto(o.tipo_servicio) || ''}</td>
+          <td>${capitalizarTexto(o.cliente_nombre) || 'Cliente'}</td>
+          <td>${formatearItems(o.items)}</td>
+          <td>$ ${Number(o.subtotal || 0).toLocaleString()}</td>
+          <td>${capitalizarTexto(o.estado_pago) || ''}</td>
+          <td>${capitalizarTexto(o.metodo_pago) || ''}</td>
+          <td>${capitalizarTexto(o.estado) || ''}</td>
+          <td>${o.creado_en ? o.creado_en.split('T')[0] : ''}</td>
+        </tr>
+      `;
+    });
+
+    contenidoTablaHtml += `
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([contenidoTablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `cierre_caja_ventas_${fechaObjetivo}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // REPORTE CSV MEJORADO CON ESTILO HTML + XML (Soporte de Colores Naranja/Blanco Vértizze Order y Columnas Separadas)
