@@ -1,246 +1,207 @@
 // ============================================================================
-// ARCHIVO: src/vistas/Login.jsx
-// DESCRIPCIÓN: Pantalla de selección de rol y autenticación por usuario (Admin y Cocina).
+// ARCHIVO: src/App.jsx (Enrutador Seguro y Limpio - Medusa Granizados)
 // ============================================================================
 
-import React, { useState } from 'react';
-import { ChefHat, ShieldCheck, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
-import { supabase } from '../../sdk/supabaseClient';
+import React, { useState, useEffect } from 'react';
 
-export default function Login({ alIniciarSesion }) {
-  const [modo, setModo] = useState('seleccion'); // 'seleccion', 'admin_form' o 'cocina_form'
-  const [usuario, setUsuario] = useState('');
-  const [password, setPassword] = useState('');
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState('');
+// Vistas del Administrador y Personal (Privadas)
+import Login from './vistas/admin/Login';
+import DashboardGeneral from './vistas/admin/DashboardGeneral';
 
-  const manejarLoginAdmin = async (e) => {
-    e.preventDefault();
-    setCargando(true);
-    setError('');
+// Vista de Cocina / KDS (Tiempo Real)
+import PantallaPedidos from './vistas/pedidos/PantallaPedidos';
 
-    try {
-      const { data, error: err } = await supabase
-        .from('usuarios_admin')
-        .select('*')
-        .ilike('usuario', usuario.trim())
-        .eq('password', password.trim())
-        .maybeSingle();
+// Vistas del Cliente (Públicas - Web de Pedidos)
+import PantallaInicio from './vistas/cliente/PantallaInicio';
+import PantallaMenu from './vistas/cliente/PantallaMenu';
+import PantallaCarrito from './vistas/cliente/PantallaCarrito';
+import PantallaCheckout from './vistas/cliente/PantallaCheckout';
+import PantallaExito from './vistas/cliente/PantallaExito';
 
-      if (err || !data) {
-        throw new Error('Usuario o contraseña incorrectos.');
-      }
+export default function App() {
+  const [rutaActual, setRutaActual] = useState(window.location.pathname);
 
-      localStorage.setItem('vertizze_sesion', JSON.stringify(data));
-      localStorage.setItem('rol_vertizze', data.rol || 'administrador');
-      alIniciarSesion(data.rol || 'administrador');
-    } catch (err) {
-      setError(err.message || 'Error al iniciar sesión');
-    } finally {
-      setCargando(false);
+  const [modoPedido, setModoPedido] = useState(null);
+  const [pasoCliente, setPasoCliente] = useState('inicio');
+  const [carrito, setCarrito] = useState([]);
+  const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
+
+  const [sesionActiva, setSesionActiva] = useState(false);
+  const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'colaborador'
+
+  useEffect(() => {
+    const actualizarRuta = () => setRutaActual(window.location.pathname);
+
+    window.addEventListener('popstate', actualizarRuta);
+
+    const originalPushState = window.history.pushState;
+    window.history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      actualizarRuta();
+    };
+
+    const sesionGuardada = JSON.parse(localStorage.getItem('vertizze_sesion') || 'null');
+    const rolGuardado = localStorage.getItem('rol_vertizze') || sesionGuardada?.rol;
+
+    if (sesionGuardada || rolGuardado) {
+      setSesionActiva(true);
+      setRolSesion((rolGuardado || 'administrador').toLowerCase().trim());
+    }
+
+    return () => {
+      window.removeEventListener('popstate', actualizarRuta);
+      window.history.pushState = originalPushState;
+    };
+  }, []);
+
+  const cerrarSesionGeneral = () => {
+    localStorage.removeItem('vertizze_sesion');
+    localStorage.removeItem('sesion_admin');
+    localStorage.removeItem('rol_vertizze');
+    setSesionActiva(false);
+    setRolSesion(null);
+
+    if (window.location.pathname.toLowerCase() !== '/login') {
+      window.history.pushState({}, '', '/login');
+      setRutaActual('/login');
     }
   };
 
-  const manejarLoginCocina = async (e) => {
-    e.preventDefault();
-    setCargando(true);
-    setError('');
-
-    try {
-      const { data, error: err } = await supabase
-        .from('usuarios_admin')
-        .select('*')
-        .ilike('usuario', usuario.trim())
-        .eq('password', password.trim())
-        .maybeSingle();
-
-      if (err || !data) {
-        throw new Error('Usuario o contraseña incorrectos.');
+  const manejarAgregarAlCarrito = (producto) => {
+    setCarrito((carritoActual) => {
+      const existe = carritoActual.some((item) => item.id === producto.id);
+      if (existe) {
+        return carritoActual.map((item) =>
+          item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        );
       }
-
-      const rolUsuario = (data.rol || '').toLowerCase();
-      if (rolUsuario !== 'cocina' && rolUsuario !== 'administrador') {
-        throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
-      }
-
-      const rolFinal = rolUsuario === 'cocina' ? 'cocina' : (data.rol || 'administrador');
-      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolFinal }));
-      localStorage.setItem('rol_vertizze', rolFinal);
-
-      alIniciarSesion(rolFinal);
-    } catch (err) {
-      setError(err.message || 'Error al autenticar en cocina');
-    } finally {
-      setCargando(false);
-    }
+      return [...carritoActual, { ...producto, cantidad: 1, observacion: '' }];
+    });
   };
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+  const manejarActualizarCantidad = (idProducto, nuevaCantidad) => {
+    if (nuevaCantidad <= 0) {
+      manejarEliminarItem(idProducto);
+      return;
+    }
+    setCarrito((carritoActual) =>
+      carritoActual.map((item) =>
+        item.id === idProducto ? { ...item, cantidad: nuevaCantidad } : item
+      )
+    );
+  };
 
-        {/* Cabecera */}
-        <div className="text-center space-y-2 mb-8">
-          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-400 mx-auto shadow-inner">
-            <ChefHat className="w-8 h-8" />
+  const manejarActualizarObservacionItem = (idProducto, nuevaObservacion) => {
+    setCarrito((carritoActual) =>
+      carritoActual.map((item) =>
+        item.id === idProducto ? { ...item, observacion: nuevaObservacion } : item
+      )
+    );
+  };
+
+  const manejarEliminarItem = (idProducto) => {
+    setCarrito((carritoActual) => carritoActual.filter((item) => item.id !== idProducto));
+  };
+
+  const manejarVolverInicioCliente = () => {
+    setDatosUltimaOrden(null);
+    setCarrito([]);
+    setModoPedido(null);
+    setPasoCliente('inicio');
+  };
+
+  // ==========================================================================
+  // ENRUTAMIENTO POR URL (Administración / Cocina - KDS)
+  // ==========================================================================
+  const ruta = (rutaActual || window.location.pathname).toLowerCase();
+
+  if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
+    if (!sesionActiva) {
+      return (
+        <Login
+          alIniciarSesion={(rolAsignado = 'administrador') => {
+            const rolNormalizado = rolAsignado.toLowerCase().trim();
+            localStorage.setItem('rol_vertizze', rolNormalizado);
+            setRolSesion(rolNormalizado);
+            setSesionActiva(true);
+          }}
+        />
+      );
+    }
+
+    if (rolSesion === 'cocina') {
+      return (
+        <div className="min-h-screen bg-[#07070F] text-white flex flex-col justify-between select-none">
+          <div className="bg-[#0B1220] border-b border-[#2F6BFF]/30 px-6 py-3 flex justify-between items-center text-xs">
+            <span className="text-[#35E0FF] font-bold flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FF2E9A] animate-pulse"></span>
+              KDS Cocina — Medusa Granizados
+            </span>
+            <button
+              onClick={cerrarSesionGeneral}
+              className="text-[#FF2E9A] hover:text-white font-bold cursor-pointer"
+            >
+              Cerrar Sesión
+            </button>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">Sistema Gastronómico</h1>
-          <p className="text-xs text-neutral-400">Selecciona tu módulo de trabajo</p>
+          <PantallaPedidos />
         </div>
+      );
+    }
 
-        {modo === 'seleccion' ? (
-          <div className="space-y-4">
-            <button
-              onClick={() => { setModo('admin_form'); setUsuario(''); setPassword(''); setError(''); }}
-              className="w-full bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-4 rounded-2xl flex items-center justify-between transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white">Administrador</h3>
-                  <p className="text-xs text-neutral-400">Dashboard, contabilidad, menú y reportes</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-neutral-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
-            </button>
+    if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
+      return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
+    }
+  }
 
-            <button
-              onClick={() => { setModo('cocina_form'); setUsuario(''); setPassword(''); setError(''); }}
-              className="w-full bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 p-4 rounded-2xl flex items-center justify-between transition-all group cursor-pointer"
-            >
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center">
-                  <ChefHat className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white">Módulo de Cocina (KDS)</h3>
-                  <p className="text-xs text-neutral-400">Acceso seguro a la cola de pedidos</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-neutral-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-            </button>
-          </div>
-        ) : modo === 'admin_form' ? (
-          <form onSubmit={manejarLoginAdmin} className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Acceso Administrador</h2>
-              <button
-                type="button"
-                onClick={() => setModo('seleccion')}
-                className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
-              >
-                Volver
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-red-950/80 border border-red-500/40 text-red-200 p-3 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-300">Usuario</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. admin"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 pl-10 text-sm text-white focus:outline-none focus:border-amber-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-300">Contraseña</label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 pl-10 text-sm text-white focus:outline-none focus:border-amber-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={cargando}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer mt-4"
-            >
-              {cargando ? 'Verificando...' : 'Ingresar al Dashboard'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={manejarLoginCocina} className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Acceso Módulo de Cocina (KDS)</h2>
-              <button
-                type="button"
-                onClick={() => setModo('seleccion')}
-                className="text-xs text-neutral-400 hover:text-white underline cursor-pointer"
-              >
-                Volver
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-red-950/80 border border-red-500/40 text-red-200 p-3 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-300">Usuario de Cocina</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. cocina1"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 pl-10 text-sm text-white focus:outline-none focus:border-emerald-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-300">Contraseña / PIN</label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-3 w-4 h-4 text-neutral-500" />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 pl-10 text-sm text-white focus:outline-none focus:border-emerald-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={cargando}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer mt-4"
-            >
-              {cargando ? 'Verificando...' : 'Ingresar a Cocina (KDS)'}
-            </button>
-          </form>
-        )}
-
-      </div>
+  // ==========================================================================
+  // RUTA PREDETERMINADA / PÚBLICA (Cliente en la raíz "/")
+  // ==========================================================================
+  return (
+    <div className="relative min-h-screen bg-[#07070F] text-white">
+      {pasoCliente === 'inicio' && (
+        <PantallaInicio
+          alSeleccionarModo={(modo) => {
+            setModoPedido(modo);
+            setPasoCliente('menu');
+          }}
+        />
+      )}
+      {pasoCliente === 'menu' && (
+        <PantallaMenu
+          modoPedido={modoPedido}
+          alVolverInicio={manejarVolverInicioCliente}
+          alIrAlCarrito={() => setPasoCliente('carrito')}
+          carrito={carrito}
+          alAgregarAlCarrito={manejarAgregarAlCarrito}
+        />
+      )}
+      {pasoCliente === 'carrito' && (
+        <PantallaCarrito
+          carrito={carrito}
+          modoPedido={modoPedido}
+          alVolverAlMenu={() => setPasoCliente('menu')}
+          alActualizarCantidad={manejarActualizarCantidad}
+          alActualizarObservacion={manejarActualizarObservacionItem}
+          alEliminarItem={manejarEliminarItem}
+          alIrAlCheckout={() => setPasoCliente('checkout')}
+        />
+      )}
+      {pasoCliente === 'checkout' && (
+        <PantallaCheckout
+          carrito={carrito}
+          modoPedido={modoPedido}
+          alVolverAlCarrito={() => setPasoCliente('carrito')}
+          alConfirmarPedido={(orden) => {
+            setDatosUltimaOrden(orden);
+            setCarrito([]);
+            setPasoCliente('exito');
+          }}
+        />
+      )}
+      {pasoCliente === 'exito' && (
+        <PantallaExito datosOrden={datosUltimaOrden} alVolverInicio={manejarVolverInicioCliente} />
+      )}
     </div>
   );
 }
