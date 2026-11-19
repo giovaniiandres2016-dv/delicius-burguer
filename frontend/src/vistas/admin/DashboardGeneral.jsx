@@ -394,7 +394,7 @@ const cambiarRol = (nuevoRol) => {
     const codigoAGenerar = limpio || generarPinSeguro6Digitos();
 
     try {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocalStr();
 
       // Intenta usar RPC si existe; si no, hace upsert directo quemando código anterior (usado = false para el nuevo)
       const { error: errRpc } = await supabase.rpc('generar_o_rotar_codigo_diario', {
@@ -446,7 +446,7 @@ const cambiarRol = (nuevoRol) => {
 
     setValidandoPin(true);
     try {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocalStr();
       let esValido = false;
 
       const { data: dataRpc, error: errRpc } = await supabase.rpc('validar_y_quemar_codigo', {
@@ -1207,78 +1207,152 @@ const guardarProducto = async (e) => {
 
   const exportarVentasDiaACSV = (fechaDia) => {
     const fechaObjetivo = fechaDia || obtenerFechaLocalStr();
-    const ordenesDelDia = ordenes.filter(o => {
+
+    const ordenesPagadasDelDia = ordenes.filter(o => {
       const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
-      return fechaCreacion === fechaObjetivo;
+      const esPagado = o.estado_pago && String(o.estado_pago).toLowerCase().trim() === 'pagado';
+      return fechaCreacion === fechaObjetivo && esPagado;
     });
 
-    if (ordenesDelDia.length === 0) {
-      alert(`Caja cerrada, pero no hay órdenes registradas en la fecha ${fechaObjetivo} para exportar.`);
+    if (ordenesPagadasDelDia.length === 0) {
+      alert(`Caja cerrada, pero no hay órdenes marcadas como PAGADO en la fecha ${fechaObjetivo} para exportar.`);
       return;
     }
 
-    let contenidoTablaHtml = `
+    const limpiarTextoExcel = (txt) => {
+      if (!txt) return '';
+      return String(txt)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, ' &#8226; ');
+    };
+
+    const formatearSoloItemsPagados = (itemsRaw) => {
+      if (!itemsRaw) return 'Sin detalle';
+      let items = itemsRaw;
+      if (typeof itemsRaw === 'string') {
+        try { items = JSON.parse(itemsRaw); } catch (e) { return limpiarTextoExcel(capitalizarTexto(itemsRaw)); }
+      }
+      if (!Array.isArray(items) || items.length === 0) return 'Sin detalle';
+
+      return items.map(item => {
+        const cant = item.cantidad || item.stock || 1;
+        const nom = capitalizarTexto(item.nombre || item.producto || item.descripcion || 'Artículo');
+        const nota = item.observacion ? ` [${limpiarTextoExcel(item.observacion)}]` : '';
+        return `${cant}x ${limpiarTextoExcel(nom)}${nota}`;
+      }).join(' | ');
+    };
+
+    let totalEfectivo = 0;
+    let totalDigital = 0;
+    let totalGeneral = 0;
+
+    const filasHtml = ordenesPagadasDelDia.map((o, idx) => {
+      const esDomi = (o.tipo_servicio || '').toLowerCase().includes('domicilio');
+      const costoDom = esDomi ? calcularCostoDomicilio(o) : 0;
+      const totalOrden = Number(o.subtotal || o.total || 0) + costoDom;
+      const metodo = capitalizarTexto(o.metodo_pago || 'Efectivo');
+
+      totalGeneral += totalOrden;
+      if (metodo.toLowerCase().includes('efectivo')) {
+        totalEfectivo += totalOrden;
+      } else {
+        totalDigital += totalOrden;
+      }
+
+      const claseFila = idx % 2 === 1 ? ' class="fila-par"' : '';
+      const fechaCorta = o.creado_en ? o.creado_en.split('T')[0] : fechaObjetivo;
+
+      return `
+        <tr${claseFila}>
+          <td class="centro"><b>#${limpiarTextoExcel(o.id)}</b></td>
+          <td class="centro">${limpiarTextoExcel(o.numero_orden || '-')}</td>
+          <td class="centro"><span class="badge-servicio">${limpiarTextoExcel(capitalizarTexto(o.tipo_servicio || 'Local'))}</span></td>
+          <td><b>${limpiarTextoExcel(capitalizarTexto(o.cliente_nombre || 'Cliente General'))}</b></td>
+          <td>${formatearSoloItemsPagados(o.items)}</td>
+          <td class="centro"><span class="badge-pagado">PAGADO</span></td>
+          <td class="centro">${limpiarTextoExcel(metodo)}</td>
+          <td class="derecha"><b>$ ${totalOrden.toLocaleString('es-CO')}</b></td>
+          <td class="centro">${limpiarTextoExcel(fechaCorta)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const contenidoTablaHtml = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
-        <meta charset="UTF-8">
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
         <style>
-          table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 11pt; }
-          th { background-color: #F97316; color: #FFFFFF; font-weight: bold; text-align: center; padding: 10px; border: 1px solid #C2410C; }
-          td { padding: 8px; border: 1px solid #E5E7EB; text-align: left; vertical-align: middle; }
-          tr:nth-child(even) { background-color: #FFF7ED; }
-          .titulo { font-size: 16pt; font-weight: bold; color: #C2410C; margin-bottom: 10px; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #1F2937; }
+          .banner { background-color: #171717; color: #FFFFFF; padding: 14px 18px; border-bottom: 4px solid #F59E0B; margin-bottom: 10px; }
+          .marca { font-size: 18pt; font-weight: bold; color: #F59E0B; letter-spacing: 0.5px; }
+          .subtitulo { font-size: 10pt; color: #E5E7EB; margin-top: 3px; }
+          .meta { font-size: 10pt; margin: 8px 0 12px 0; color: #374151; }
+          table { border-collapse: collapse; width: 100%; font-size: 10.5pt; }
+          th { background-color: #171717; color: #FBBF24; font-weight: bold; text-align: center; padding: 10px 8px; border: 1px solid #D97706; }
+          td { padding: 8px 9px; border: 1px solid #E5E7EB; vertical-align: middle; color: #111827; }
+          .fila-par { background-color: #FFFBEB; }
+          .centro { text-align: center; }
+          .derecha { text-align: right; color: #92400E; }
+          .badge-pagado { background-color: #DCFCE7; color: #166534; font-weight: bold; padding: 3px 8px; border-radius: 4px; font-size: 9pt; }
+          .badge-servicio { background-color: #FEF3C7; color: #92400E; font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 9pt; }
+          .resumen-box { margin-top: 14px; width: 420px; border-collapse: collapse; }
+          .resumen-box td { border: 1px solid #F59E0B; padding: 7px 10px; font-size: 10.5pt; }
+          .resumen-label { background-color: #FFFBEB; font-weight: bold; color: #171717; }
+          .resumen-total { background-color: #171717; color: #FBBF24; font-weight: bold; font-size: 11.5pt; }
         </style>
       </head>
       <body>
-        <div class="titulo">CIERRE DE CAJA Y VENTAS DEL DÍA - VÉRTIZZE ORDER</div>
-        <p><b>Fecha de Cierre:</b> ${fechaObjetivo}</p>
+        <div class="banner">
+          <div class="marca">DELICIUS BURGUERS — CIERRE DE CAJA (SOLO PAGADOS)</div>
+          <div class="subtitulo">Reporte oficial de ventas cobradas del día • Operado por Vértizze</div>
+        </div>
+        <div class="meta">
+          <b>Fecha de Cierre:</b> ${fechaObjetivo} &nbsp;|&nbsp;
+          <b>Órdenes Cobradas Exportadas:</b> ${ordenesPagadasDelDia.length}
+        </div>
         <table>
           <thead>
             <tr>
               <th>ID</th>
               <th>Nro Orden</th>
-              <th>Tipo Servicio</th>
+              <th>Servicio</th>
               <th>Cliente</th>
-              <th>Ítems</th>
-              <th>Subtotal</th>
+              <th>Productos Vendidos y Cobrados</th>
               <th>Estado Pago</th>
               <th>Método Pago</th>
-              <th>Estado Pedido</th>
+              <th>Total Cobrado</th>
               <th>Fecha</th>
             </tr>
           </thead>
           <tbody>
-    `;
-
-    ordenesDelDia.forEach(o => {
-      contenidoTablaHtml += `
-        <tr>
-          <td>${o.id}</td>
-          <td>${o.numero_orden || ''}</td>
-          <td>${capitalizarTexto(o.tipo_servicio) || ''}</td>
-          <td>${capitalizarTexto(o.cliente_nombre) || 'Cliente'}</td>
-          <td>${formatearItems(o.items)}</td>
-          <td>$ ${Number(o.subtotal || 0).toLocaleString()}</td>
-          <td>${capitalizarTexto(o.estado_pago) || ''}</td>
-          <td>${capitalizarTexto(o.metodo_pago) || ''}</td>
-          <td>${capitalizarTexto(o.estado) || ''}</td>
-          <td>${o.creado_en ? o.creado_en.split('T')[0] : ''}</td>
-        </tr>
-      `;
-    });
-
-    contenidoTablaHtml += `
+            ${filasHtml}
           </tbody>
+        </table>
+        <table class="resumen-box">
+          <tr>
+            <td class="resumen-label">Total Cobrado en Efectivo</td>
+            <td class="derecha"><b>$ ${totalEfectivo.toLocaleString('es-CO')}</b></td>
+          </tr>
+          <tr>
+            <td class="resumen-label">Total Cobrado Transferencia / Digital</td>
+            <td class="derecha"><b>$ ${totalDigital.toLocaleString('es-CO')}</b></td>
+          </tr>
+          <tr>
+            <td class="resumen-total">TOTAL VENTAS COBRADAS</td>
+            <td class="resumen-total" style="text-align:right;">$ ${totalGeneral.toLocaleString('es-CO')}</td>
+          </tr>
         </table>
       </body>
       </html>
     `;
 
-    const blob = new Blob([contenidoTablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const blob = new Blob(['\ufeff', contenidoTablaHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `cierre_caja_ventas_${fechaObjetivo}.xls`);
+    link.setAttribute("download", `Delicius_Burguers_Cierre_Pagados_${fechaObjetivo}.xls`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1290,12 +1364,13 @@ const exportarACSV = () => {
       alert("Acceso denegado: Su rol de Colaborador no tiene permisos para exportar archivos.");
       return;
     }
-    const ordenesFiltradas = ordenes.filter(o => {
+  const ordenesFiltradas = ordenes.filter(o => {
+      const esPagado = o.estado_pago && String(o.estado_pago).toLowerCase().trim() === 'pagado';
+      if (!esPagado) return false;
       if (!fechaInicio || !fechaFin) return true;
       const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
       return fechaCreacion >= fechaInicio && fechaCreacion <= fechaFin;
     });
-
     if (ordenesFiltradas.length === 0) {
       alert("No hay registros en el rango seleccionado.");
       return;
@@ -3046,6 +3121,7 @@ const eliminarZonaCobertura = async (id) => {
       }
 
       case 'contabilidad': {
+        const hoyContabilidad = obtenerFechaLocalStr();
         const ordenesFiltradas = ordenes.filter(o => {
           if (!fechaInicio || !fechaFin) return true;
           const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
