@@ -334,10 +334,17 @@ const cambiarRol = (nuevoRol) => {
     return String(100000 + (array[0] % 900000));
   };
 
+ // Obtener fecha local en YYYY-MM-DD (evita desfase UTC)
+  const obtenerFechaLocalStr = () => {
+    const ahora = new Date();
+    const offsetMs = ahora.getTimezoneOffset() * 60000;
+    return new Date(ahora.getTime() - offsetMs).toISOString().split('T')[0];
+  };
+
   // Consultar el código del día activo y el estado de cierre del día
   const consultarCodigoDelDia = async () => {
     try {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocalStr();
 
       const [{ data, error }, { data: cierreHoy }] = await Promise.all([
         supabase
@@ -349,6 +356,8 @@ const cambiarRol = (nuevoRol) => {
           .from('cierres_caja')
           .select('id, fecha')
           .eq('fecha', hoyStr)
+          .order('id', { ascending: false })
+          .limit(1)
           .maybeSingle()
       ]);
 
@@ -358,8 +367,8 @@ const cambiarRol = (nuevoRol) => {
         setEstadoCajaCerrada(true);
       }
 
-      if (data) {
-        setCodigoActivoHoy(data.codigo);
+      if (data && data.codigo) {
+        setCodigoActivoHoy(String(data.codigo));
         setCodigoUsadoHoy(Boolean(data.usado));
       } else {
         setCodigoActivoHoy('Sin código');
@@ -369,7 +378,6 @@ const cambiarRol = (nuevoRol) => {
       console.error("Error consultando código:", err.message);
     }
   };
-
   // Función exclusiva del Admin para generar, cambiar o rotar el código diario (quemando el anterior)
   const rotarCodigoDelDia = async (codigoPersonalizado = null) => {
     if (rolUsuario !== 'administrador') {
@@ -414,6 +422,8 @@ const cambiarRol = (nuevoRol) => {
         }
       }
 
+      setCodigoActivoHoy(codigoAGenerar);
+      setCodigoUsadoHoy(false);
       setNuevoCodigoInput('');
       await consultarCodigoDelDia();
       alert(`Código de cierre actualizado y anterior invalidado.\nCódigo vigente para hoy: ${codigoAGenerar}`);
