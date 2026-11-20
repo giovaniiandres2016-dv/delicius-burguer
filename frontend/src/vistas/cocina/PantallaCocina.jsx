@@ -113,7 +113,6 @@ export default function PantallaCocina() {
       const ahora = audioCtx.currentTime;
 
       if (tipo === 'modificada') {
-        // Doble pulso ascendente para distinguir modificación de orden
         [0, 0.18].forEach((offset) => {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
@@ -181,7 +180,6 @@ export default function PantallaCocina() {
         }
       });
 
-      // Limpiar marcas de órdenes que ya salieron de cocina
       Object.keys(siguienteInfo).forEach((idStr) => {
         const idNum = Number(idStr);
         if (!mapaSiguiente.has(idNum)) {
@@ -356,7 +354,7 @@ export default function PantallaCocina() {
 
     return (
       <div className="flex items-center gap-1 bg-black/60 border border-amber-500/40 px-2 py-0.5 rounded-md text-amber-300 font-mono text-[10px] font-bold">
-        <Clock className="w-3 h-3" />
+        <Clock className="w-3 h-3"/>
         <span>{formatoTiempo}</span>
       </div>
     );
@@ -437,7 +435,6 @@ export default function PantallaCocina() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-2.5 sm:p-4 select-none flex flex-col justify-between">
-      {/* COMPROBANTE / FACTURA PARA IMPRESIÓN */}
       {ordenImprimiendo && (
         <div className="hidden print:block fixed inset-0 bg-white text-black text-xs p-4 z-[9999] font-mono">
           <div className="max-w-[80mm] mx-auto space-y-2">
@@ -472,11 +469,10 @@ export default function PantallaCocina() {
       )}
 
       <div className="space-y-3">
-        {/* ENCABEZADO COMPACTO */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-neutral-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 shrink-0">
-              <ChefHat className="w-4 h-4" />
+              <ChefHat className="w-4 h-4"/>
             </div>
             <div>
               <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase">
@@ -495,7 +491,7 @@ export default function PantallaCocina() {
               title="Probar sonido de alerta"
               className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-amber-400 flex items-center gap-1.5 cursor-pointer transition-all touch-manipulation"
             >
-              <Bell className="w-3.5 h-3.5" />
+              <Bell className="w-3.5 h-3.5"/>
               <span>Probar Sonido</span>
             </button>
 
@@ -506,14 +502,13 @@ export default function PantallaCocina() {
           </div>
         </div>
 
-        {/* CONTENIDO DE ÓRDENES */}
         {cargando && ordenes.length === 0 ? (
           <div className="text-center py-16 text-neutral-500 text-xs">
             Sincronizando órdenes con la base de datos...
           </div>
         ) : ordenes.length === 0 ? (
           <div className="text-center py-16 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2">
-            <ChefHat className="w-10 h-10 text-neutral-700 mx-auto" />
+            <ChefHat className="w-10 h-10 text-neutral-700 mx-auto"/>
             <p className="text-xs font-bold text-neutral-400">No hay pedidos pendientes en la cola</p>
             <p className="text-[11px] text-neutral-600">Los nuevos pedidos aparecerán automáticamente aquí al crearse.</p>
           </div>
@@ -539,7 +534,6 @@ export default function PantallaCocina() {
                 estiloBotonAccion = 'bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black';
               }
 
-              // Resaltado distintivo cuando la orden fue modificada
               if (estaModificada) {
                 estilosTarjeta = 'border-fuchsia-400 bg-fuchsia-950/85 text-fuchsia-50 ring-2 ring-fuchsia-400/50 hover:border-fuchsia-300';
                 franjaColor = 'bg-fuchsia-400';
@@ -554,7 +548,6 @@ export default function PantallaCocina() {
                   <div className={`absolute top-0 inset-x-0 h-1 ${franjaColor}`}></div>
 
                   <div className="space-y-2 pt-0.5">
-                    {/* FILA SUPERIOR: ORDEN + ETIQUETAS + IMPRIMIR OPCIONAL */}
                     <div className="flex items-center justify-between gap-1 flex-wrap">
                       <div className="flex items-center gap-1 flex-wrap">
                         <span className="text-[11px] font-black bg-black/50 px-2 py-0.5 rounded-md border border-white/10 text-amber-300">
@@ -563,7 +556,7 @@ export default function PantallaCocina() {
 
                         {estaModificada && (
                           <span className="text-[9px] font-black bg-fuchsia-400 text-neutral-950 px-1.5 py-0.5 rounded-md uppercase flex items-center gap-0.5">
-                            <Sparkles className="w-2.5 h-2.5" />
+                            <Sparkles className="w-2.5 h-2.5"/>
                             Modificada
                           </span>
                         )}
@@ -571,24 +564,24 @@ export default function PantallaCocina() {
 
                       <div className="flex items-center gap-1 flex-wrap">
                         {(estadoActual === 'en_proceso' || estadoActual === 'en proceso') && orden.tiempo_inicio && (
-                          <CronometroActivo tiempoInicio={orden.tiempo_inicio} />
+                          <CronometroActivo tiempoInicio="{orden.tiempo_inicio}"/>
                         )}
 
                         {numeroMesa && (
                           <span className="text-[10px] font-black bg-amber-500 text-neutral-950 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                            <UtensilsCrossed className="w-2.5 h-2.5" />
+                            <UtensilsCrossed className="w-2.5 h-2.5"/>
                             M{numeroMesa}
                           </span>
                         )}
 
                         {esDomicilio ? (
                           <span className="text-[10px] font-black bg-purple-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
-                            <Bike className="w-3 h-3" />
+                            <Bike className="w-3 h-3"/>
                             Domicilio
                           </span>
                         ) : (
                           <span className="text-[10px] font-black bg-cyan-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
-                            <Store className="w-3 h-3" />
+                            <Store className="w-3 h-3"/>
                             Local
                           </span>
                         )}
@@ -603,13 +596,12 @@ export default function PantallaCocina() {
                           title="Imprimir factura de la orden"
                           className="bg-black/50 hover:bg-black/80 border border-white/15 text-neutral-200 hover:text-amber-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <Printer className="w-3 h-3" />
+                          <Printer className="w-3 h-3"/>
                           <span>Imprimir</span>
                         </button>
                       </div>
                     </div>
 
-                    {/* CLIENTE Y PAGO */}
                     <div className="flex items-baseline justify-between gap-2">
                       <h3 className="text-sm font-black tracking-tight text-white truncate">
                         {orden.cliente_nombre || 'Cliente'}
@@ -619,7 +611,6 @@ export default function PantallaCocina() {
                       </span>
                     </div>
 
-                    {/* ARTÍCULOS */}
                     <div className="bg-black/40 border border-white/10 rounded-lg p-2 space-y-1">
                       <span className="text-[9px] font-extrabold text-white/65 uppercase tracking-wider block">
                         Artículos:
@@ -628,7 +619,6 @@ export default function PantallaCocina() {
                     </div>
                   </div>
 
-                  {/* ACCIÓN PRINCIPAL */}
                   <div className="mt-2.5 pt-2 border-t border-white/15">
                     <div
                       className={`w-full py-2 rounded-lg text-[11px] uppercase tracking-wider transition-all flex items-center justify-center ${estiloBotonAccion}`}
@@ -645,4 +635,3 @@ export default function PantallaCocina() {
     </div>
   );
 }
-```[cite: 12]
