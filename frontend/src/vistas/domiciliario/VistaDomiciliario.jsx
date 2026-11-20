@@ -3231,10 +3231,18 @@ const eliminarZonaCobertura = async (id) => {
                 <p className="text-[11px] text-neutral-400 mt-0.5">Cierre de caja, auditoría por fechas, gestión de códigos dinámicos y exportación a CSV.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={filtrarHoyContabilidad} className="bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-amber-400 font-bold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-md">
+                <button
+                  type="button"
+                  onClick={filtrarHoyContabilidad}
+                  className="bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-amber-400 font-bold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-md"
+                >
                   Filtrar Hoy
                 </button>
-                <button onClick={exportarACSV} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer shrink-0">
+                <button
+                  type="button"
+                  onClick={exportarACSV}
+                  className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-3 py-2 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer shrink-0"
+                >
                   <Download className="w-3.5 h-3.5" /> Exportar Reporte CSV / Excel
                 </button>
               </div>
@@ -3287,32 +3295,20 @@ const eliminarZonaCobertura = async (id) => {
                 <div className="absolute top-0 inset-x-0 h-1 bg-emerald-500"></div>
                 <div>
                   <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">Estado de Caja Hoy</span>
-                  <p className={`text-sm font-black mt-1 flex items-center gap-1.5 ${estadoCajaCerrada ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {estadoCajaCerrada ? (
-                      <>
-                        <Lock className="w-4 h-4 shrink-0" />
-                        <span>Caja Cerrada</span>
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="w-4 h-4 shrink-0" />
-                        <span>Caja Abierta</span>
-                      </>
-                    )}
+                  <p className={`text-sm font-black mt-1 ${estadoCajaCerrada ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {estadoCajaCerrada ? 'Caja Cerrada' : 'Caja Abierta'}
                   </p>
                 </div>
                 {estadoCajaCerrada ? (
-                  <div className="mt-2 w-full py-2 bg-neutral-800/80 border border-neutral-700/80 text-emerald-400 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5">
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                  <div className="mt-2 w-full py-2 bg-neutral-800/80 border border-neutral-700/80 text-emerald-400 font-bold rounded-xl text-xs flex items-center justify-center">
                     <span>Caja Cerrada Hoy</span>
                   </div>
                 ) : (
                   <button 
                     type="button"
                     onClick={() => { setErrorPin(''); setPinCierre(''); setModalPinAbierto(true); }}
-                    className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5"
+                    className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center"
                   >
-                    <Key className="w-3.5 h-3.5 shrink-0" />
                     <span>Cerrar Caja de Hoy</span>
                   </button>
                 )}
@@ -3418,7 +3414,7 @@ const eliminarZonaCobertura = async (id) => {
                       <ShieldCheck className="w-4 h-4 text-amber-500" />
                       Autorización de Cierre de Caja
                     </h3>
-                    <button onClick={() => setModalPinAbierto(false)} className="p-1 bg-neutral-950 rounded-lg text-neutral-400 hover:text-white cursor-pointer">
+                    <button type="button" onClick={() => setModalPinAbierto(false)} className="p-1 bg-neutral-950 rounded-lg text-neutral-400 hover:text-white cursor-pointer">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
