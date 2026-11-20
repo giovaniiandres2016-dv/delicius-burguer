@@ -4,11 +4,12 @@
 // ============================================================================
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Clock, ChefHat, Bell, UtensilsCrossed, Bike, Store, Printer, Sparkles } from 'lucide-react';
+import { Clock, ChefHat, Bell, UtensilsCrossed, Bike, Store, Printer, Sparkles, X } from 'lucide-react';
 import { supabase } from '../../sdk/supabaseClient';
 import { asignarDomiciliarioAlCompletarCocina } from '../../sdk/vertizzeApi';
 
 const ESTADOS_ACTIVOS_COCINA = new Set(['pendiente', 'en_proceso', 'en proceso']);
+const ESTADOS_CANCELADOS = new Set(['cancelada', 'cancelado', 'anulada', 'anulado']);
 
 function parsearItemsSeguros(itemsRaw) {
   if (!itemsRaw) return [];
@@ -28,7 +29,7 @@ function normalizarItemParaComparar(item, index) {
   const cantidad = Number(item?.cantidad || 1);
   const nombre = String(item?.nombre || item?.titulo || item?.producto || 'Artículo').trim();
   const observacion = String(item?.observacion || item?.nota || '').trim();
-  const clave = String(item?.id ?? `${nombre.toLowerCase()}__${index}`);
+  const clave = item?.id != null ? `id:${String(item.id)}` : `idx:${index}:${nombre.toLowerCase()}`;
   return { clave, cantidad, nombre, observacion };
 }
 
@@ -42,11 +43,13 @@ function detectarCambiosEnOrden(ordenAnterior, ordenNueva) {
     mapaPrev.set(norm.clave, norm);
   });
 
+  const mapaNext = new Map();
   const cambiosPorIndice = {};
   let huboCambioEnItems = false;
 
   itemsNext.forEach((it, idx) => {
     const norm = normalizarItemParaComparar(it, idx);
+    mapaNext.set(norm.clave, norm);
     const prev = mapaPrev.get(norm.clave);
 
     if (!prev) {
@@ -67,12 +70,19 @@ function detectarCambiosEnOrden(ordenAnterior, ordenNueva) {
     }
   });
 
+  const itemsEliminados = [];
+  mapaPrev.forEach((prevItem, clave) => {
+    if (!mapaNext.has(clave)) {
+      itemsEliminados.push(prevItem);
+      huboCambioEnItems = true;
+    }
+  });
+
   if (itemsPrev.length !== itemsNext.length) {
     huboCambioEnItems = true;
   }
 
-  const camposRelevantes = [
-    'items',
+  const camposDetalle = [
     'cliente_nombre',
     'metodo_pago',
     'estado_pago',
@@ -84,13 +94,14 @@ function detectarCambiosEnOrden(ordenAnterior, ordenNueva) {
     'ubicacion_detalle'
   ];
 
-  const huboCambioEnCabecera = camposRelevantes.some(
+  const huboCambioEnDetalle = camposDetalle.some(
     (campo) => JSON.stringify(ordenAnterior?.[campo] ?? null) !== JSON.stringify(ordenNueva?.[campo] ?? null)
   );
 
   return {
-    modificada: huboCambioEnItems || huboCambioEnCabecera,
+    modificada: huboCambioEnItems || huboCambioEnDetalle,
     cambiosPorIndice,
+    itemsEliminados,
     actualizadaEn: Date.now()
   };
 }
@@ -100,12 +111,14 @@ export default function PantallaCocina() {
   const [coberturaZonas, setCoberturaZonas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [ordenModificadaInfo, setOrdenModificadaInfo] = useState({});
+  const [ordenesCanceladas, setOrdenesCanceladas] = useState([]);
   const [ordenImprimiendo, setOrdenImprimiendo] = useState(null);
   const [audioHabilitado, setAudioHabilitado] = useState(false);
 
   const ordenesPreviasRef = useRef(new Map());
   const inicializadoRef = useRef(false);
   const audioCtxRef = useRef(null);
+  const cambioLocalEnCursoRef = useRef(new Map());
 
   const desbloquearAudioContext = async () => {
     try {
@@ -152,23 +165,44 @@ export default function PantallaCocina() {
 
       const ahora = audioCtx.currentTime;
 
-      if (tipo === 'modificada') {
-        [0, 0.18].forEach((offset) => {
+      if (tipo === 'cancelada') {
+        [0, 0.22].forEach((offset) => {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(740, ahora + offset);
-          osc.frequency.exponentialRampToValueAtTime(987.77, ahora + offset + 0.12);
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(340, ahora + offset);
+          osc.frequency.linearRampToValueAtTime(195, ahora + offset + 0.18);
 
           gain.gain.setValueAtTime(0.001, ahora + offset);
           gain.gain.linearRampToValueAtTime(0.24, ahora + offset + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, ahora + offset + 0.16);
+          gain.gain.exponentialRampToValueAtTime(0.001, ahora + offset + 0.2);
 
           osc.connect(gain);
           gain.connect(audioCtx.destination);
 
           osc.start(ahora + offset);
-          osc.stop(ahora + offset + 0.17);
+          osc.stop(ahora + offset + 0.21);
+        });
+        return;
+      }
+
+      if (tipo === 'modificada') {
+        [0, 0.16].forEach((offset) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(740, ahora + offset);
+          osc.frequency.exponentialRampToValueAtTime(987.77, ahora + offset + 0.11);
+
+          gain.gain.setValueAtTime(0.001, ahora + offset);
+          gain.gain.linearRampToValueAtTime(0.22, ahora + offset + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, ahora + offset + 0.14);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(ahora + offset);
+          osc.stop(ahora + offset + 0.15);
         });
         return;
       }
@@ -210,6 +244,25 @@ export default function PantallaCocina() {
     }
 
     return 5000;
+  };
+
+  const registrarOrdenCancelada = (ordenData) => {
+    if (!ordenData || !ordenData.id) return;
+    setOrdenesCanceladas((prev) => {
+      const filtradas = prev.filter((item) => item.id !== ordenData.id);
+      return [...filtradas, { ...ordenData, _canceladaEn: Date.now() }];
+    });
+    setOrdenModificadaInfo((prev) => {
+      if (!prev[ordenData.id]) return prev;
+      const copia = { ...prev };
+      delete copia[ordenData.id];
+      return copia;
+    });
+  };
+
+  const descartarOrdenCancelada = (ordenId) => {
+    setOrdenesCanceladas((prev) => prev.filter((item) => item.id !== ordenId));
+    ordenesPreviasRef.current.delete(ordenId);
   };
 
   const sincronizarMapaOrdenes = (listaOrdenes, dispararAlertasPorDiff = false) => {
@@ -303,22 +356,45 @@ export default function PantallaCocina() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes' },
         async (payload) => {
-          if (payload.eventType === 'INSERT') {
-            await reproducirAlertaSonora('nueva');
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
+          if (payload.eventType === 'INSERT' && payload.new) {
             const estadoNuevo = String(payload.new.estado || '').toLowerCase().trim();
             if (ESTADOS_ACTIVOS_COCINA.has(estadoNuevo)) {
-              const anterior = ordenesPreviasRef.current.get(payload.new.id);
-              if (anterior) {
-                const diff = detectarCambiosEnOrden(anterior, payload.new);
+              await reproducirAlertaSonora('nueva');
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const ordenNueva = payload.new;
+            const estadoNuevo = String(ordenNueva.estado || '').toLowerCase().trim();
+            const anterior = ordenesPreviasRef.current.get(ordenNueva.id);
+            const cambioLocal = cambioLocalEnCursoRef.current.get(ordenNueva.id);
+
+            if (ESTADOS_CANCELADOS.has(estadoNuevo)) {
+              registrarOrdenCancelada(ordenNueva);
+              await reproducirAlertaSonora('cancelada');
+              await obtenerOrdenes({ alertarEnCambios: false });
+              return;
+            }
+
+            if (ESTADOS_ACTIVOS_COCINA.has(estadoNuevo)) {
+              if (cambioLocal) {
+                cambioLocalEnCursoRef.current.delete(ordenNueva.id);
+              } else if (anterior) {
+                const diff = detectarCambiosEnOrden(anterior, ordenNueva);
                 if (diff.modificada) {
                   setOrdenModificadaInfo((prev) => ({
                     ...prev,
-                    [payload.new.id]: diff
+                    [ordenNueva.id]: diff
                   }));
+                  await reproducirAlertaSonora('modificada');
                 }
               }
-              await reproducirAlertaSonora('modificada');
+            } else if (cambioLocal) {
+              cambioLocalEnCursoRef.current.delete(ordenNueva.id);
+            }
+          } else if (payload.eventType === 'DELETE' && payload.old?.id) {
+            const anterior = ordenesPreviasRef.current.get(payload.old.id);
+            if (anterior) {
+              registrarOrdenCancelada({ ...anterior, estado: 'cancelada' });
+              await reproducirAlertaSonora('cancelada');
             }
           }
 
@@ -377,6 +453,12 @@ export default function PantallaCocina() {
     }
 
     if (nuevoEstado) {
+      cambioLocalEnCursoRef.current.set(orden.id, {
+        estadoAnterior: estadoActual,
+        estadoNuevo: nuevoEstado,
+        ts: Date.now()
+      });
+
       try {
         const { error } = await supabase
           .from('ordenes')
@@ -391,6 +473,7 @@ export default function PantallaCocina() {
 
         await obtenerOrdenes({ alertarEnCambios: false });
       } catch (error) {
+        cambioLocalEnCursoRef.current.delete(orden.id);
         console.error('Error al actualizar estado en cocina:', error);
       }
     }
@@ -425,32 +508,35 @@ export default function PantallaCocina() {
     const formatoTiempo = minutos > 0 ? `${minutos}m ${segundos}s` : `${segundos}s`;
 
     return (
-      <div className="flex items-center gap-1 bg-black/60 border border-amber-500/40 px-2 py-0.5 rounded-md text-amber-300 font-mono text-[10px] font-bold">
-        <Clock className="w-3 h-3" />
+      <div className="flex items-center gap-1 bg-black/70 border border-amber-500/50 px-2.5 py-1 rounded-lg text-amber-300 font-mono text-xs font-bold">
+        <Clock className="w-3.5 h-3.5" />
         <span>{formatoTiempo}</span>
       </div>
     );
   };
 
-  const renderizarArticulos = (itemsRaw, cambiosPorIndice = {}) => {
-    if (!itemsRaw) return <span className="text-white/60 text-xs">Sin descripción de productos</span>;
+  const renderizarArticulos = (itemsRaw, cambiosPorIndice = {}, itemsEliminados = []) => {
+    if (!itemsRaw && itemsEliminados.length === 0) {
+      return <span className="text-neutral-400 text-sm">Sin descripción de productos</span>;
+    }
 
+    let listaItems = itemsRaw;
     if (typeof itemsRaw === 'string') {
       try {
         const parsed = JSON.parse(itemsRaw);
         if (!Array.isArray(parsed)) {
-          return <p className="text-xs font-semibold text-amber-100">{itemsRaw}</p>;
+          return <p className="text-sm sm:text-base font-bold text-amber-100">{itemsRaw}</p>;
         }
-        itemsRaw = parsed;
+        listaItems = parsed;
       } catch {
-        return <p className="text-xs font-semibold text-amber-100">{itemsRaw}</p>;
+        return <p className="text-sm sm:text-base font-bold text-amber-100">{itemsRaw}</p>;
       }
     }
 
-    if (Array.isArray(itemsRaw)) {
+    if (Array.isArray(listaItems)) {
       return (
-        <div className="space-y-1.5">
-          {itemsRaw.map((item, index) => {
+        <div className="space-y-2.5">
+          {listaItems.map((item, index) => {
             const cantidad = item?.cantidad || 1;
             const nombre = item?.nombre || item?.titulo || item?.producto || 'Artículo';
             const observacion = item?.observacion || item?.nota || '';
@@ -460,36 +546,42 @@ export default function PantallaCocina() {
             return (
               <div
                 key={index}
-                className={`border-b border-white/10 pb-1 last:border-b-0 last:pb-0 rounded-md transition-colors ${
+                className={`border-b border-white/10 pb-2 last:border-b-0 last:pb-0 rounded-lg transition-colors ${
                   itemResaltado
-                    ? 'bg-fuchsia-500/20 border border-fuchsia-400/60 px-1.5 py-1'
+                    ? 'bg-amber-500/20 border border-amber-400 px-2.5 py-1.5'
                     : ''
                 }`}
               >
-                <div className="flex items-center justify-between gap-1.5 text-xs font-extrabold text-white leading-snug">
-                  <span className={itemResaltado ? 'text-fuchsia-200' : 'text-white'}>
-                    <span className={cambio?.cantidadCambio || cambio?.esNuevo ? 'text-amber-300 underline decoration-amber-400' : ''}>
+                <div className="flex items-start justify-between gap-2 text-sm sm:text-base font-extrabold text-white leading-snug">
+                  <span className={itemResaltado ? 'text-amber-200' : 'text-white'}>
+                    <span
+                      className={
+                        cambio?.cantidadCambio || cambio?.esNuevo
+                          ? 'text-amber-400 underline decoration-amber-400 font-black'
+                          : 'text-amber-400'
+                      }
+                    >
                       {cantidad}x
                     </span>{' '}
                     {nombre}
                   </span>
                   {cambio?.esNuevo && (
-                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-fuchsia-400 text-neutral-950 shrink-0">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-neutral-950 shrink-0">
                       Nuevo
                     </span>
                   )}
                   {!cambio?.esNuevo && cambio?.cantidadCambio && (
-                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-400 text-neutral-950 shrink-0">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-neutral-950 shrink-0">
                       Cant.
                     </span>
                   )}
                 </div>
                 {observacion && (
                   <p
-                    className={`text-[11px] font-bold italic mt-0.5 px-1.5 py-0.5 rounded inline-block ${
+                    className={`text-xs sm:text-sm font-bold mt-1 px-2 py-0.5 rounded inline-block ${
                       cambio?.notaCambio
-                        ? 'bg-amber-400 text-neutral-950 not-italic font-black'
-                        : 'text-amber-300 bg-black/35'
+                        ? 'bg-amber-400 text-neutral-950 font-black'
+                        : 'text-amber-300 bg-black/50 border border-amber-500/30'
                     }`}
                   >
                     Nota: {observacion}
@@ -498,11 +590,27 @@ export default function PantallaCocina() {
               </div>
             );
           })}
+
+          {itemsEliminados.length > 0 && (
+            <div className="pt-2 border-t border-amber-500/40 space-y-1">
+              <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 block">
+                Quitado de la orden:
+              </span>
+              {itemsEliminados.map((rem, idx) => (
+                <p
+                  key={idx}
+                  className="text-xs sm:text-sm font-bold line-through text-neutral-400 bg-black/50 px-2 py-1 rounded border border-neutral-800"
+                >
+                  {rem.cantidad}x {rem.nombre}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
 
-    return <p className="text-xs font-semibold text-amber-100">{JSON.stringify(itemsRaw)}</p>;
+    return <p className="text-sm sm:text-base font-bold text-amber-100">{JSON.stringify(listaItems)}</p>;
   };
 
   const ordenEstaPagada = ordenImprimiendo
@@ -519,7 +627,7 @@ export default function PantallaCocina() {
   const totalImpresion = subtotalImpresion + (esDomicilioImpresion ? costoDomicilioImpresion : 0);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-2.5 sm:p-4 select-none flex flex-col justify-between">
+    <div className="min-h-screen bg-neutral-950 text-white p-3 sm:p-5 select-none flex flex-col justify-between">
       {/* FACTURA / TICKET IGUAL AL MÓDULO DE ÓRDENES CON VALIDACIÓN DE PAGO */}
       {ordenImprimiendo && (
         <div className="hidden print:block fixed inset-0 bg-white text-black text-sm p-4 z-[9999] font-mono">
@@ -633,54 +741,127 @@ export default function PantallaCocina() {
         </div>
       )}
 
-      <div className="space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 border-b border-neutral-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 shrink-0">
-              <ChefHat className="w-4 h-4" />
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-800 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-center justify-center text-amber-400 shrink-0">
+              <ChefHat className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white uppercase">
+              <h1 className="text-lg sm:text-xl font-black tracking-tight text-white uppercase">
                 DELICIUS <span className="text-amber-500">BURGUES</span> - COCINA (KDS)
               </h1>
-              <p className="text-[11px] text-neutral-400">
-                Toca la tarjeta para avanzar el estado • Órdenes modificadas resaltan en violeta.
+              <p className="text-xs sm:text-sm text-neutral-400">
+                Toca la tarjeta para avanzar estado • Alerta sonora solo en cambios de orden o cancelaciones.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={() => reproducirAlertaSonora('nueva')}
               title="Probar sonido de alerta"
-              className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-amber-400 flex items-center gap-1.5 cursor-pointer transition-all touch-manipulation"
+              className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-3 py-2 rounded-xl text-xs font-bold text-amber-400 flex items-center gap-1.5 cursor-pointer transition-all touch-manipulation"
             >
-              <Bell className="w-3.5 h-3.5" />
+              <Bell className="w-4 h-4" />
               <span>{audioHabilitado ? 'Probar Sonido' : 'Activar / Probar Sonido'}</span>
             </button>
 
-            <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-amber-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-xl text-xs font-bold text-amber-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
               <span>Sistema en Línea</span>
             </div>
           </div>
         </div>
 
-        {cargando && ordenes.length === 0 ? (
-          <div className="text-center py-16 text-neutral-500 text-xs">
+        {cargando && ordenes.length === 0 && ordenesCanceladas.length === 0 ? (
+          <div className="text-center py-16 text-neutral-400 text-sm font-semibold">
             Sincronizando órdenes con la base de datos...
           </div>
-        ) : ordenes.length === 0 ? (
-          <div className="text-center py-16 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2">
-            <ChefHat className="w-10 h-10 text-neutral-700 mx-auto" />
-            <p className="text-xs font-bold text-neutral-400">No hay pedidos pendientes en la cola</p>
-            <p className="text-[11px] text-neutral-600">Los nuevos pedidos aparecerán automáticamente aquí al crearse.</p>
+        ) : ordenes.length === 0 && ordenesCanceladas.length === 0 ? (
+          <div className="text-center py-16 bg-neutral-900/50 border border-neutral-800 rounded-2xl space-y-2">
+            <ChefHat className="w-11 h-11 text-neutral-700 mx-auto" />
+            <p className="text-sm font-bold text-neutral-300">No hay pedidos pendientes en la cola</p>
+            <p className="text-xs text-neutral-500">Los nuevos pedidos aparecerán automáticamente aquí al crearse.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 pb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-6">
+            {ordenesCanceladas.map((ordenCancelada) => {
+              const numeroMesa = ordenCancelada.mesa || ordenCancelada.numero_mesa || ordenCancelada.mesa_id;
+              const tipoServicioRaw = (ordenCancelada.tipo_servicio || '').toLowerCase();
+              const esDomicilio = tipoServicioRaw.includes('domicilio') || tipoServicioRaw.includes('delivery');
+
+              return (
+                <div
+                  key={`cancelada-${ordenCancelada.id}`}
+                  className="border-2 border-amber-500/80 bg-neutral-950 text-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden min-h-[280px]"
+                >
+                  {/* MARCA CON X GRANDE SOBRE LA ORDEN CANCELADA */}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
+                    <span className="text-[128px] leading-none font-black text-amber-500/35 select-none">
+                      ✕
+                    </span>
+                  </div>
+
+                  <div className="relative z-30 space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-black bg-neutral-900 px-2.5 py-1 rounded-lg border border-amber-500/50 text-amber-300">
+                          #{ordenCancelada.numero_orden || ordenCancelada.id}
+                        </span>
+                        <span className="text-xs font-black bg-amber-500 text-neutral-950 px-2.5 py-1 rounded-lg uppercase">
+                          Cancelada
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {numeroMesa && (
+                          <span className="text-xs font-black bg-amber-500 text-neutral-950 px-2 py-1 rounded-lg flex items-center gap-1">
+                            <UtensilsCrossed className="w-3.5 h-3.5" />
+                            M{numeroMesa}
+                          </span>
+                        )}
+                        <span className="text-xs font-black bg-neutral-800 border border-white/15 text-amber-300 px-2 py-1 rounded-lg flex items-center gap-1 uppercase">
+                          {esDomicilio ? <Bike className="w-3.5 h-3.5" /> : <Store className="w-3.5 h-3.5" />}
+                          {esDomicilio ? 'Domicilio' : 'Local'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h3 className="text-base sm:text-lg font-black tracking-tight text-neutral-300 line-through truncate">
+                        {ordenCancelada.cliente_nombre || 'Cliente'}
+                      </h3>
+                    </div>
+
+                    <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3">
+                      <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider block mb-1.5">
+                        Artículos cancelados:
+                      </span>
+                      <div className="opacity-75">
+                        {renderizarArticulos(ordenCancelada.items)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-30 mt-4 pt-3 border-t border-neutral-800">
+                    <button
+                      type="button"
+                      onClick={() => descartarOrdenCancelada(ordenCancelada.id)}
+                      className="w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-neutral-900 hover:bg-neutral-800 text-amber-300 border border-amber-500/40 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Quitar Cancelada</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
             {ordenes.map((orden) => {
               const estadoActual = (orden.estado || 'pendiente').toLowerCase().trim();
+              const enProceso = estadoActual === 'en_proceso' || estadoActual === 'en proceso';
               const numeroMesa = orden.mesa || orden.numero_mesa || orden.mesa_id;
               const tipoServicioRaw = (orden.tipo_servicio || '').toLowerCase();
               const esDomicilio = tipoServicioRaw.includes('domicilio') || tipoServicioRaw.includes('delivery');
@@ -692,64 +873,57 @@ export default function PantallaCocina() {
               let textoBotonAccion = 'Iniciar Preparación';
               let estiloBotonAccion = 'bg-neutral-800 hover:bg-neutral-700 text-white border border-white/15';
 
-              if (estadoActual === 'en_proceso' || estadoActual === 'en proceso') {
-                estilosTarjeta = 'border-amber-500 bg-amber-950/90 text-amber-50 hover:border-amber-400';
-                franjaColor = 'bg-amber-400';
+              if (enProceso) {
+                estilosTarjeta = 'border-amber-500/80 bg-neutral-900 text-white hover:border-amber-400';
+                franjaColor = 'bg-amber-500';
                 textoBotonAccion = 'Marcar como Listo';
                 estiloBotonAccion = 'bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black';
               }
 
               if (estaModificada) {
-                estilosTarjeta = 'border-fuchsia-400 bg-fuchsia-950/85 text-fuchsia-50 ring-2 ring-fuchsia-400/50 hover:border-fuchsia-300';
-                franjaColor = 'bg-fuchsia-400';
+                estilosTarjeta = 'border-amber-400 bg-neutral-900 text-white ring-2 ring-amber-400/50 hover:border-amber-300';
+                franjaColor = 'bg-amber-400';
               }
 
               return (
                 <div
                   key={orden.id}
                   onClick={() => manejarAccionTarjeta(orden)}
-                  className={`border-2 rounded-xl p-2.5 flex flex-col justify-between transition-all relative overflow-hidden cursor-pointer active:scale-[0.99] touch-manipulation ${estilosTarjeta}`}
+                  className={`border-2 rounded-2xl p-4 flex flex-col justify-between transition-all relative overflow-hidden cursor-pointer active:scale-[0.99] touch-manipulation min-h-[280px] ${estilosTarjeta}`}
                 >
-                  <div className={`absolute top-0 inset-x-0 h-1 ${franjaColor}`}></div>
+                  <div className={`absolute top-0 inset-x-0 h-1.5 ${franjaColor}`}></div>
 
-                  <div className="space-y-2 pt-0.5">
-                    <div className="flex items-center justify-between gap-1 flex-wrap">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-[11px] font-black bg-black/50 px-2 py-0.5 rounded-md border border-white/10 text-amber-300">
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-black bg-black/60 px-2.5 py-1 rounded-lg border border-white/15 text-amber-300">
                           #{orden.numero_orden || orden.id}
                         </span>
 
                         {estaModificada && (
-                          <span className="text-[9px] font-black bg-fuchsia-400 text-neutral-950 px-1.5 py-0.5 rounded-md uppercase flex items-center gap-0.5">
-                            <Sparkles className="w-2.5 h-2.5" />
+                          <span className="text-[11px] font-black bg-amber-400 text-neutral-950 px-2 py-0.5 rounded-lg uppercase flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
                             Modificada
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {(estadoActual === 'en_proceso' || estadoActual === 'en proceso') && orden.tiempo_inicio && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {enProceso && orden.tiempo_inicio && (
                           <CronometroActivo tiempoInicio={orden.tiempo_inicio} />
                         )}
 
                         {numeroMesa && (
-                          <span className="text-[10px] font-black bg-amber-500 text-neutral-950 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                            <UtensilsCrossed className="w-2.5 h-2.5" />
+                          <span className="text-xs font-black bg-amber-500 text-neutral-950 px-2 py-1 rounded-lg flex items-center gap-1">
+                            <UtensilsCrossed className="w-3.5 h-3.5" />
                             M{numeroMesa}
                           </span>
                         )}
 
-                        {esDomicilio ? (
-                          <span className="text-[10px] font-black bg-purple-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
-                            <Bike className="w-3 h-3" />
-                            Domicilio
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-black bg-cyan-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 uppercase">
-                            <Store className="w-3 h-3" />
-                            Local
-                          </span>
-                        )}
+                        <span className="text-xs font-black bg-neutral-800 border border-white/15 text-amber-300 px-2 py-1 rounded-lg flex items-center gap-1 uppercase">
+                          {esDomicilio ? <Bike className="w-3.5 h-3.5" /> : <Store className="w-3.5 h-3.5" />}
+                          {esDomicilio ? 'Domicilio' : 'Local'}
+                        </span>
 
                         <button
                           type="button"
@@ -759,34 +933,38 @@ export default function PantallaCocina() {
                             imprimirFacturaOrden(orden);
                           }}
                           title="Imprimir factura de la orden"
-                          className="bg-black/50 hover:bg-black/80 border border-white/15 text-neutral-200 hover:text-amber-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          className="bg-black/60 hover:bg-black border border-white/15 text-neutral-200 hover:text-amber-300 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <Printer className="w-3 h-3" />
+                          <Printer className="w-3.5 h-3.5" />
                           <span>Imprimir</span>
                         </button>
                       </div>
                     </div>
 
                     <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="text-sm font-black tracking-tight text-white truncate">
+                      <h3 className="text-base sm:text-lg font-black tracking-tight text-white truncate">
                         {orden.cliente_nombre || 'Cliente'}
                       </h3>
-                      <span className="text-[10px] text-white/75 font-semibold capitalize shrink-0">
+                      <span className="text-xs text-amber-300/90 font-bold capitalize shrink-0">
                         {orden.metodo_pago || 'Efectivo'}
                       </span>
                     </div>
 
-                    <div className="bg-black/40 border border-white/10 rounded-lg p-2 space-y-1">
-                      <span className="text-[9px] font-extrabold text-white/65 uppercase tracking-wider block">
+                    <div className="bg-black/45 border border-white/10 rounded-xl p-3 space-y-1.5">
+                      <span className="text-[11px] font-extrabold text-neutral-400 uppercase tracking-wider block">
                         Artículos:
                       </span>
-                      {renderizarArticulos(orden.items, infoCambio?.cambiosPorIndice || {})}
+                      {renderizarArticulos(
+                        orden.items,
+                        infoCambio?.cambiosPorIndice || {},
+                        infoCambio?.itemsEliminados || []
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-white/15">
+                  <div className="mt-4 pt-3 border-t border-white/15">
                     <div
-                      className={`w-full py-2 rounded-lg text-[11px] uppercase tracking-wider transition-all flex items-center justify-center ${estiloBotonAccion}`}
+                      className={`w-full py-2.5 rounded-xl text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center ${estiloBotonAccion}`}
                     >
                       <span>{textoBotonAccion}</span>
                     </div>
