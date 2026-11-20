@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Menu, X, LayoutDashboard, FileSpreadsheet, 
   ClipboardList, Utensils, LogOut, Store, ExternalLink,
-  Plus, Calendar, Download, Edit3, Trash2, Image as ImageIcon, CheckCircle, Clock, Printer, CreditCard, AlertCircle, ArrowUpRight, Search, Filter, ChevronLeft, ChevronRight, Users, Phone, MapPin, Receipt, FileText, Truck, Key, ShieldCheck, RefreshCw, Banknote, Smartphone, Lock
+  Plus, Calendar, Download, Edit3, Trash2, Image as ImageIcon, CheckCircle, CheckCircle2, Bike, MinusCircle, Clock, Printer, CreditCard, AlertCircle, ArrowUpRight, Search, Filter, ChevronLeft, ChevronRight, Users, Phone, MapPin, Receipt, FileText, Truck, Key, ShieldCheck, RefreshCw, Banknote, Smartphone, Lock
 } from 'lucide-react';
 import { obtenerMenu, supabase } from '../../sdk/vertizzeApi';
 
@@ -2584,11 +2584,20 @@ const eliminarZonaCobertura = async (id) => {
                           </div>
 
                           <div className="flex justify-between items-center pt-1 border-t border-neutral-800">
-                            <select value={domi.estado || 'fuera de turno'} onChange={(e) => cambiarEstadoDomiciliarioAdmin(domi.id, e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded px-1.5 py-0.5 text-[10px] text-white font-bold cursor-pointer">
-                              <option value="disponible">🟢 Disponible</option>
-                              <option value="en ruta">🛵 En Ruta</option>
-                              <option value="fuera de turno">🔴 Fuera</option>
-                            </select>
+                            <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-800 rounded px-2 py-0.5">
+                              {estadoDomi === 'disponible' && <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />}
+                              {estadoDomi === 'en ruta' && <Bike className="w-3 h-3 text-amber-400 shrink-0" />}
+                              {estadoDomi !== 'disponible' && estadoDomi !== 'en ruta' && <MinusCircle className="w-3 h-3 text-rose-400 shrink-0" />}
+                              <select
+                                value={domi.estado || 'fuera de turno'}
+                                onChange={(e) => cambiarEstadoDomiciliarioAdmin(domi.id, e.target.value)}
+                                className="bg-transparent text-[10px] text-white font-bold focus:outline-none cursor-pointer"
+                              >
+                                <option value="disponible" className="bg-neutral-950 text-white">Disponible</option>
+                                <option value="en ruta" className="bg-neutral-950 text-white">En Ruta</option>
+                                <option value="fuera de turno" className="bg-neutral-950 text-white">Fuera</option>
+                              </select>
+                            </div>
                             <div className="space-x-1">
                               <button onClick={() => abrirModalEditarDomiciliario(domi)} className="p-1 bg-neutral-800 hover:bg-neutral-700 text-amber-400 rounded" title="Editar"><Edit3 className="w-3 h-3" /></button>
                               <button onClick={() => eliminarDomiciliario(domi.id)} className="p-1 bg-red-500/10 text-red-400 rounded" title="Bloquear"><Lock className="w-3 h-3" /></button>
@@ -2708,9 +2717,9 @@ const eliminarZonaCobertura = async (id) => {
                     <div>
                       <label className="text-[11px] font-semibold text-neutral-300 block mb-1">Estado Operativo *</label>
                       <select value={formEstadoDomi} onChange={(e) => setFormEstadoDomi(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none cursor-pointer">
-                        <option value="disponible">🟢 Disponible</option>
-                        <option value="en ruta">🛵 En Ruta</option>
-                        <option value="fuera de turno">🔴 Fuera de Turno</option>
+                        <option value="disponible">Disponible</option>
+                        <option value="en ruta">En Ruta</option>
+                        <option value="fuera de turno">Fuera de Turno</option>
                       </select>
                     </div>
                     <div className="pt-2 flex gap-2">
