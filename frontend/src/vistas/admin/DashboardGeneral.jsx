@@ -2616,9 +2616,9 @@ const eliminarZonaCobertura = async (id) => {
                   <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-amber-500" /> Zonas y Precios ({coberturaZonas.length})
                   </h3>
-                  <button onClick={abrirModalCrearZona} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer">
+                  {/* <button onClick={abrirModalCrearZona} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer">
                     <Plus className="w-3 h-3" /> Nueva Zona
-                  </button>
+                  </button> */}
                 </div>
 
                 {cargandoZonas ? (
@@ -2628,12 +2628,12 @@ const eliminarZonaCobertura = async (id) => {
                 ) : (
                   <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-2 space-y-2 max-h-[500px] overflow-y-auto">
                     <table className="w-full text-left text-xs">
-                      <thead>
+                     <thead>
                         <tr className="border-b border-neutral-800 text-neutral-400 text-[10px]">
                           <th className="pb-1.5">Barrio / Zona</th>
                           <th className="pb-1.5">Precio Envío</th>
                           <th className="pb-1.5 text-center">Estado</th>
-                          <th className="pb-1.5 text-right">Acciones</th>
+                          {/* <th className="pb-1.5 text-right">Acciones</th> */}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-800/60">
@@ -2646,10 +2646,10 @@ const eliminarZonaCobertura = async (id) => {
                                 {zona.activo ? 'Activo' : 'Inactivo'}
                               </span>
                             </td>
-                            <td className="py-2 text-right space-x-1">
+                            {/* <td className="py-2 text-right space-x-1">
                               <button onClick={() => abrirModalEditarZona(zona)} className="p-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded" title="Editar"><Edit3 className="w-3 h-3" /></button>
                               <button onClick={() => eliminarZonaCobertura(zona.id)} className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded" title="Eliminar"><Trash2 className="w-3 h-3" /></button>
-                            </td>
+                            </td> */}
                           </tr>
                         ))}
                       </tbody>
@@ -2660,7 +2660,7 @@ const eliminarZonaCobertura = async (id) => {
 
             </div>
 
-            {/* MODAL PARA CREAR / EDITAR ZONA DE COBERTURA */}
+            {/* MODAL PARA CREAR / EDITAR ZONA DE COBERTURA (DESHABILITADO)
             {modalZonaAbierto && (
               <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl relative">
@@ -2692,6 +2692,7 @@ const eliminarZonaCobertura = async (id) => {
                 </div>
               </div>
             )}
+            */}
 
             {/* MODAL DOMICILIARIO (Existente) */}
             {modalDomiciliarioAbierto && (
