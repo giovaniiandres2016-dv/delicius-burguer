@@ -120,6 +120,28 @@ export default function App() {
   // ==========================================================================
   const ruta = (rutaActual || window.location.pathname).toLowerCase();
 
+  // Acceso directo a la vista de Domiciliarios (/domiciliario)
+  if (ruta.includes('/domiciliario')) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
+        <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
+          <span className="text-amber-400 font-bold flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            Modo Domiciliario Activo
+          </span>
+          <button
+            type="button"
+            onClick={cerrarSesionGeneral}
+            className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
+          >
+            Salir / Cerrar Sesión
+          </button>
+        </div>
+        <VistaDomiciliario />
+      </div>
+    );
+  }
+
   if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
     if (!sesionActiva) {
       return (
@@ -131,6 +153,8 @@ export default function App() {
             setSesionActiva(true);
             if (rolNormalizado === 'cocina' && !ruta.includes('/cocina')) {
               navegarA('/cocina');
+            } else if (rolNormalizado === 'domiciliario' && !ruta.includes('/domiciliario')) {
+              navegarA('/domiciliario');
             } else if (
               (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') &&
               !ruta.includes('/admin')
@@ -159,6 +183,27 @@ export default function App() {
             </button>
           </div>
           <PantallaCocina />
+        </div>
+      );
+    }
+
+    if (rolSesion === 'domiciliario') {
+      return (
+        <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
+          <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
+            <span className="text-amber-400 font-bold flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+              Modo Domiciliario Activo
+            </span>
+            <button
+              type="button"
+              onClick={cerrarSesionGeneral}
+              className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+          <VistaDomiciliario />
         </div>
       );
     }
