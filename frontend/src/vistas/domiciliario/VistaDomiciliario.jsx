@@ -1,7 +1,8 @@
 // ============================================================================
 // ARCHIVO: src/vistas/domiciliario/VistaDomiciliario.jsx
-// DESCRIPCIÓN: Panel KDS Domiciliarios con mapa usando `ubicacion_detalle`, 
-//              audio/vibración desbloqueado y sincronización en tiempo real sin recarga.
+// DESCRIPCIÓN: Panel KDS Domiciliarios multiusuario con sesión por PIN,
+//              mapa usando `ubicacion_detalle`, audio/vibración desbloqueado
+//              y sincronización en tiempo real sin recarga.
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -10,6 +11,8 @@ import {
   Phone, AlertCircle, RefreshCw, Navigation, History, Bell
 } from 'lucide-react';
 import { supabase } from '../../sdk/vertizzeApi';
+
+const CLAVE_SESION_DOMI = 'vertizze_domi_sesion';
 
 export default function VistaDomiciliario() {
   // Estados de Autenticación
@@ -29,7 +32,6 @@ export default function VistaDomiciliario() {
 
   // Alerta sonora y vibración
   const alertarNuevoDomicilio = () => {
-    // 1. Vibración en dispositivos móviles (200ms, 100ms pausa, 400ms)
     if ('vibrate' in navigator) {
       try {
         navigator.vibrate([200, 100, 200, 100, 400]);
@@ -38,7 +40,6 @@ export default function VistaDomiciliario() {
       }
     }
 
-    // 2. Tono de Audio Sintético
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = audioCtx.createOscillator();
@@ -61,7 +62,6 @@ export default function VistaDomiciliario() {
     }
   };
 
-  // Función para desbloquear el audio con interacción del usuario
   const habilitarSonidoInicial = () => {
     alertarNuevoDomicilio();
     setSonidoHabilitado(true);
@@ -100,24 +100,27 @@ export default function VistaDomiciliario() {
     return String(itemsRaw);
   };
 
-  // Sesión persistente
+  // Sesión persistente independiente por repartidor
   useEffect(() => {
-    const domiGuardado = localStorage.getItem('vertizze_domi_sesion');
+    const domiGuardado = localStorage.getItem(CLAVE_SESION_DOMI);
     if (domiGuardado) {
       try {
         const datos = JSON.parse(domiGuardado);
-        setDomiciliario(datos);
-        sincronizarEstadoDomi(datos.id, 'disponible');
+        if (datos && datos.id) {
+          setDomiciliario(datos);
+          sincronizarEstadoDomi(datos.id, 'disponible');
+        }
       } catch (e) {
-        localStorage.removeItem('vertizze_domi_sesion');
+        localStorage.removeItem(CLAVE_SESION_DOMI);
       }
     }
   }, []);
 
-  // Suscripción Realtime en tiempo real
+  // Suscripción Realtime en tiempo real filtrada por domiciliario
   useEffect(() => {
     if (!domiciliario) return;
 
+    conteoOrdenesPrevio.current = 0;
     cargarOrdenesDomiciliario();
 
     const canalRealtime = supabase
@@ -125,7 +128,7 @@ export default function VistaDomiciliario() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes' },
-        (payload) => {
+        () => {
           cargarOrdenesDomiciliario();
         }
       )
@@ -134,7 +137,7 @@ export default function VistaDomiciliario() {
     return () => {
       supabase.removeChannel(canalRealtime);
     };
-  }, [domiciliario]);
+  }, [domiciliario?.id]);
 
   const sincronizarEstadoDomi = async (domiId, nuevoEstado) => {
     try {
@@ -172,10 +175,10 @@ export default function VistaDomiciliario() {
         return;
       }
 
-      localStorage.setItem('vertizze_domi_sesion', JSON.stringify(data));
+      localStorage.setItem(CLAVE_SESION_DOMI, JSON.stringify(data));
       setDomiciliario(data);
+      setPinIngresado('');
       await sincronizarEstadoDomi(data.id, 'disponible');
-
     } catch (err) {
       console.error("Error login:", err.message);
       setErrorLogin('Error de conexión.');
@@ -184,15 +187,17 @@ export default function VistaDomiciliario() {
     }
   };
 
+  // Solo cierra el turno de este domiciliario sin tocar la sesión general del sistema
   const cerrarSesion = async () => {
-    if (window.confirm('¿Deseas salir de turno y cerrar sesión?')) {
+    if (window.confirm('¿Deseas salir de tu turno como domiciliario?')) {
       if (domiciliario) {
         await sincronizarEstadoDomi(domiciliario.id, 'fuera de turno');
       }
-      localStorage.removeItem('vertizze_domi_sesion');
+      localStorage.removeItem(CLAVE_SESION_DOMI);
       setDomiciliario(null);
       setOrdenesAsignadas([]);
       setPinIngresado('');
+      conteoOrdenesPrevio.current = 0;
     }
   };
 
@@ -209,7 +214,6 @@ export default function VistaDomiciliario() {
       if (error) throw error;
       const ordenesNuevas = data || [];
 
-      // Detectar asignación nueva para sonar/vibrar
       const activasNuevas = ordenesNuevas.filter(o => o.estado_domicilio !== 'entregado');
       if (activasNuevas.length > conteoOrdenesPrevio.current && conteoOrdenesPrevio.current !== 0) {
         alertarNuevoDomicilio();
@@ -256,7 +260,7 @@ export default function VistaDomiciliario() {
   const historialEntregados = ordenesAsignadas.filter(o => o.estado_domicilio === 'entregado');
   const tarifaTotalAcumulada = historialEntregados.length * 6000;
 
-  // Formulario Login
+  // Formulario Login por PIN
   if (!domiciliario) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 font-sans select-none">
@@ -325,7 +329,7 @@ export default function VistaDomiciliario() {
             </h1>
             <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              En Turno • Disponible
+              En Turno • {capitalizarTexto(domiciliario.estado || 'Disponible')}
             </span>
           </div>
         </div>
@@ -343,6 +347,7 @@ export default function VistaDomiciliario() {
 
           <button 
             onClick={cerrarSesion}
+            title="Salir de turno"
             className="p-2 bg-neutral-950 hover:bg-red-500/10 border border-neutral-800 hover:border-red-500/30 text-neutral-400 hover:text-red-400 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
           >
             <LogOut className="w-4 h-4" />
@@ -411,7 +416,6 @@ export default function VistaDomiciliario() {
             <div className="space-y-3">
               {pedidosActivos.map(orden => {
                 const telClienteLimpio = limpiarTelefono(orden.cliente_telefono || orden.telefono);
-                // LECTURA CORREGIDA: evalúa ubicacion_detalle o direccion
                 const direccionStr = orden.ubicacion_detalle || orden.direccion || orden.cliente_direccion || 'Dirección no especificada';
                 const estadoDomi = (orden.estado_domicilio || 'asignado').toLowerCase();
 
