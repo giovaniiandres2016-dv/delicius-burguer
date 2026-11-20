@@ -54,15 +54,16 @@ const esOrdenPagada = (orden) => {
 };
 
 const calcularMontosOrden = (orden) => {
-  const valorDomicilio = Number(
-    orden.costo_domicilio ??
-      orden.tarifa_domicilio ??
-      orden.valor_domicilio ??
-      orden.domicilio ??
-      orden.envio ??
-      orden.valor_envio ??
-      0
-  ) || 0;
+  const valorDomicilio =
+    Number(
+      orden.costo_domicilio ??
+        orden.tarifa_domicilio ??
+        orden.valor_domicilio ??
+        orden.domicilio ??
+        orden.envio ??
+        orden.valor_envio ??
+        0
+    ) || 0;
 
   const totalGuardado = Number(orden.total ?? 0) || 0;
   const subtotalGuardado = Number(orden.subtotal ?? 0) || 0;
@@ -83,6 +84,21 @@ const calcularMontosOrden = (orden) => {
     pagada,
     aCobrar,
   };
+};
+
+const capitalizarPalabras = (texto) => {
+  if (!texto) return '';
+  return String(texto)
+    .trim()
+    .split(/\s+/)
+    .map((pal) => {
+      if (pal === '|') return '|';
+      if (/^(dir|zona|cra|cl|tv|dg|av)$/i.test(pal)) {
+        return pal.charAt(0).toUpperCase() + pal.slice(1).toLowerCase();
+      }
+      return pal.charAt(0).toUpperCase() + pal.slice(1).toLowerCase();
+    })
+    .join(' ');
 };
 
 export default function VistaDomiciliario() {
@@ -142,13 +158,6 @@ export default function VistaDomiciliario() {
     setSonidoHabilitado(true);
   };
 
-  const capitalizarTexto = (texto) => {
-    if (!texto) return '';
-    const str = String(texto).trim();
-    if (str === '') return '';
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-  };
-
   const limpiarTelefono = (tel) => {
     if (!tel) return '';
     let limpio = String(tel).trim().replace(/\D/g, '');
@@ -172,13 +181,13 @@ export default function VistaDomiciliario() {
       return items
         .map((item) => {
           const cant = item.cantidad || item.stock || 1;
-          const nombre = capitalizarTexto(
+          const nombre = capitalizarPalabras(
             item.nombre || item.producto || item.descripcion || 'Artículo'
           );
           const obs = item.observacion ? ` (${item.observacion})` : '';
           return `${cant}x ${nombre}${obs}`;
         })
-        .join(', ');
+        .join(' • ');
     }
     return String(itemsRaw);
   };
@@ -404,39 +413,43 @@ export default function VistaDomiciliario() {
     );
   }
 
+  const estadoEtiqueta =
+    pedidosActivos.length > 0 ? 'En Ruta' : 'Disponible';
+
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex flex-col font-sans select-none">
       <header className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/20">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/20 shrink-0">
             <Truck className="w-5 h-5" />
           </div>
-          <div>
-            <h1 className="text-xs font-black tracking-wider text-white">
-              {capitalizarTexto(domiciliario.nombre)}
+          <div className="min-w-0">
+            <h1 className="text-xs font-black tracking-wider text-white truncate">
+              {capitalizarPalabras(domiciliario.nombre)}
             </h1>
             <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              En Turno • {capitalizarTexto(domiciliario.estado || 'Disponible')}
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+              En Turno • {estadoEtiqueta}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {!sonidoHabilitado && (
             <button
               onClick={habilitarSonidoInicial}
-              className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold whitespace-nowrap"
               title="Activar Sonido y Vibración"
             >
-              <Bell className="w-4 h-4 animate-bounce" /> Activar Alerta
+              <Bell className="w-4 h-4 animate-bounce shrink-0" />
+              <span>Activar Alerta</span>
             </button>
           )}
 
           <button
             onClick={cerrarSesion}
             title="Salir de turno"
-            className="p-2 bg-neutral-950 hover:bg-red-500/10 border border-neutral-800 hover:border-red-500/30 text-neutral-400 hover:text-red-400 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+            className="p-2 bg-neutral-950 hover:bg-red-500/10 border border-neutral-800 hover:border-red-500/30 text-neutral-400 hover:text-red-400 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-bold shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -457,7 +470,7 @@ export default function VistaDomiciliario() {
         </div>
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-2.5">
           <span className="text-[9px] text-neutral-400 font-bold uppercase block">Domicilios Zonas</span>
-          <p className="text-sm font-black text-white mt-0.5">
+          <p className="text-sm font-black text-white mt-0.5 whitespace-nowrap">
             $ {totalDomiciliosHistorial.toLocaleString()}
           </p>
         </div>
@@ -467,32 +480,32 @@ export default function VistaDomiciliario() {
       <div className="px-3 pt-3 flex gap-2">
         <button
           onClick={() => setPestaña('activos')}
-          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             pestaña === 'activos'
               ? 'bg-amber-500 text-neutral-950 shadow-md'
               : 'bg-neutral-900 border border-neutral-800 text-neutral-400'
           }`}
         >
-          <Clock className="w-4 h-4" />
-          <span>Servicios Activos ({pedidosActivos.length})</span>
+          <Clock className="w-4 h-4 shrink-0" />
+          <span className="truncate">Activos ({pedidosActivos.length})</span>
         </button>
 
         <button
           onClick={() => setPestaña('historial')}
-          className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             pestaña === 'historial'
               ? 'bg-amber-500 text-neutral-950 shadow-md'
               : 'bg-neutral-900 border border-neutral-800 text-neutral-400'
           }`}
         >
-          <History className="w-4 h-4" />
-          <span>Historial ({historialFiltrado.length})</span>
+          <History className="w-4 h-4 shrink-0" />
+          <span className="truncate">Historial ({historialFiltrado.length})</span>
         </button>
       </div>
 
       {/* Lista de Servicios */}
-      <main className="flex-1 p-3 space-y-3 overflow-y-auto">
-        {cargandoOrdenes ? (
+      <main className="flex-1 p-3 space-y-3 overflow-y-auto max-w-2xl w-full mx-auto">
+        {cargandoOrdenes && ordenesAsignadas.length === 0 ? (
           <div className="py-20 text-center text-neutral-500 text-xs space-y-2">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500" />
             <p>Sincronizando entregas...</p>
@@ -504,8 +517,8 @@ export default function VistaDomiciliario() {
                 <CheckCircle className="w-6 h-6" />
               </div>
               <h3 className="text-sm font-black text-white">Sin domicilios pendientes</h3>
-              <p className="text-xs text-neutral-400 max-w-xs mx-auto">
-                Mantén la aplicación abierta. Apenas el restaurante te asigne un pedido, aparecerá en esta pantalla en tiempo real.
+              <p className="text-xs text-neutral-400 max-w-xs mx-auto leading-relaxed">
+                Mantén esta pantalla abierta. Apenas te asignen un pedido, aparecerá aquí automáticamente.
               </p>
             </div>
           ) : (
@@ -537,52 +550,53 @@ export default function VistaDomiciliario() {
                       }`}
                     ></div>
 
-                    {/* Banner de Estado de Pago */}
+                    {/* Alerta clara de Estado de Pago */}
                     {!pagada ? (
-                      <div className="bg-red-500/15 border border-red-500/50 rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+                      <div className="bg-red-500/15 border border-red-500/50 rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2">
                         <span className="text-xs font-black text-red-400 uppercase tracking-wide flex items-center gap-1.5">
                           <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                          NO VA PAGO — COBRAR EN ENTREGA
+                          <span>NO VA PAGO — COBRAR EN ENTREGA</span>
                         </span>
-                        <span className="text-xs font-black text-white bg-red-600 px-2.5 py-0.5 rounded-lg">
+                        <span className="text-xs font-black text-white bg-red-600 px-2.5 py-1 rounded-lg whitespace-nowrap shrink-0">
                           $ {aCobrar.toLocaleString()}
                         </span>
                       </div>
                     ) : (
-                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-3 py-1.5 flex items-center justify-between gap-2">
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
                           <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                          PEDIDO YA PAGADO
+                          <span>PEDIDO YA PAGADO</span>
                         </span>
-                        <span className="text-[11px] font-bold text-emerald-300">
-                          Cobro al cliente: $ 0
+                        <span className="text-[11px] font-bold text-emerald-300 whitespace-nowrap shrink-0">
+                          No cobrar: $ 0
                         </span>
                       </div>
                     )}
 
+                    {/* Cabecera de orden y cliente */}
                     <div className="flex justify-between items-start gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg text-[10px] font-black uppercase tracking-wider">
                             Orden #{orden.numero_orden || orden.id}
                           </span>
                           {zonaStr && (
                             <span className="px-2 py-1 bg-neutral-800 text-neutral-200 rounded-lg text-[10px] font-bold">
-                              Zona: {capitalizarTexto(zonaStr)}
+                              Zona: {capitalizarPalabras(zonaStr)}
                             </span>
                           )}
                         </div>
                         <h3 className="text-sm font-black text-white mt-1.5">
-                          {capitalizarTexto(orden.cliente_nombre) || 'Cliente General'}
+                          {capitalizarPalabras(orden.cliente_nombre) || 'Cliente General'}
                         </h3>
                       </div>
 
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <span className="text-[10px] text-neutral-400 font-bold block">
                           {pagada ? 'Total Orden (Paga)' : 'Total a Cobrar'}
                         </span>
                         <p
-                          className={`text-base font-black ${
+                          className={`text-base font-black whitespace-nowrap ${
                             !pagada ? 'text-red-400' : 'text-emerald-400'
                           }`}
                         >
@@ -591,17 +605,17 @@ export default function VistaDomiciliario() {
                       </div>
                     </div>
 
-                    {/* Desglose claro: Pedido + Domicilio + Total */}
+                    {/* Desglose Pedido + Domicilio + Total */}
                     <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-3 space-y-1.5 text-xs">
                       <div className="flex justify-between text-neutral-300">
                         <span>Valor del pedido:</span>
-                        <span className="font-bold text-white">
+                        <span className="font-bold text-white whitespace-nowrap">
                           $ {valorPedido.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between text-neutral-300">
                         <span>Valor del domicilio:</span>
-                        <span className="font-bold text-amber-400">
+                        <span className="font-bold text-amber-400 whitespace-nowrap">
                           $ {valorDomicilio.toLocaleString()}
                         </span>
                       </div>
@@ -610,7 +624,7 @@ export default function VistaDomiciliario() {
                           {pagada ? 'Total orden (ya pagada):' : 'Total a cobrar al cliente:'}
                         </span>
                         <span
-                          className={`text-sm ${
+                          className={`text-sm whitespace-nowrap ${
                             !pagada ? 'text-red-400' : 'text-emerald-400'
                           }`}
                         >
@@ -619,15 +633,16 @@ export default function VistaDomiciliario() {
                       </div>
                     </div>
 
-                    <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-3 space-y-2">
+                    {/* Dirección y Mapa */}
+                    <div className="bg-neutral-950 border border-neutral-800 rounded-2xl p-3 space-y-2.5">
                       <div className="flex items-start gap-2">
                         <MapPin className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-[10px] text-neutral-400 font-bold uppercase block">
-                            Dirección de Entrega:
+                            Dirección de Entrega
                           </span>
-                          <p className="text-xs font-bold text-white leading-relaxed">
-                            {capitalizarTexto(direccionStr)}
+                          <p className="text-xs font-bold text-white leading-relaxed mt-0.5">
+                            {capitalizarPalabras(direccionStr)}
                           </p>
                         </div>
                       </div>
@@ -639,53 +654,62 @@ export default function VistaDomiciliario() {
                           )}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="w-full py-2 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-xl text-xs font-bold text-amber-400 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-xl text-xs font-bold text-amber-400 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                         >
-                          <Navigation className="w-3.5 h-3.5" /> Abrir Mapa / GPS
+                          <Navigation className="w-3.5 h-3.5 shrink-0" />
+                          <span>Abrir en Google Maps</span>
                         </a>
                       )}
                     </div>
 
+                    {/* Contacto rápido */}
                     {telClienteLimpio && (
                       <div className="flex gap-2">
                         <a
                           href={`tel:${telClienteLimpio}`}
-                          className="flex-1 py-2 bg-neutral-950 border border-neutral-800 text-emerald-400 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5"
+                          className="flex-1 py-2.5 bg-neutral-950 border border-neutral-800 rounded-2xl text-xs font-bold text-emerald-400 flex items-center justify-center gap-1.5"
                         >
-                          <Phone className="w-3.5 h-3.5" /> Llamar Cliente
+                          <Phone className="w-3.5 h-3.5 shrink-0" />
+                          <span>Llamar</span>
                         </a>
                         <a
                           href={`https://wa.me/57${telClienteLimpio}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex-1 py-2 bg-neutral-950 border border-neutral-800 text-emerald-400 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5"
+                          className="flex-1 py-2.5 bg-neutral-950 border border-neutral-800 rounded-2xl text-xs font-bold text-emerald-400 flex items-center justify-center gap-1.5"
                         >
-                          💬 WhatsApp
+                          <span>WhatsApp</span>
                         </a>
                       </div>
                     )}
 
-                    <div className="bg-neutral-950/60 border border-neutral-800/80 rounded-2xl p-2.5 space-y-1">
+                    {/* Productos */}
+                    <div className="bg-neutral-950/60 border border-neutral-800/80 rounded-2xl p-3 space-y-1">
                       <span className="text-[10px] text-neutral-400 font-bold uppercase block">
-                        Contenido del Pedido:
+                        Contenido del Pedido
                       </span>
-                      <p className="text-xs text-neutral-300">{formatearItems(orden.items)}</p>
+                      <p className="text-xs text-neutral-200 leading-relaxed">
+                        {formatearItems(orden.items)}
+                      </p>
                     </div>
 
+                    {/* Acción principal */}
                     <div className="pt-1 flex gap-2">
                       {estadoDomi !== 'en_ruta' && estadoDomi !== 'en ruta' ? (
                         <button
                           onClick={() => actualizarEstadoPedido(orden.id, 'en_ruta')}
-                          className="w-full py-3 bg-amber-500 text-neutral-950 font-black rounded-2xl text-xs uppercase cursor-pointer flex items-center justify-center gap-2"
+                          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-2xl text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2 transition-all"
                         >
-                          <Truck className="w-4 h-4" /> Iniciar Recorrido (En Ruta)
+                          <Truck className="w-4 h-4 shrink-0" />
+                          <span>Iniciar Recorrido (En Ruta)</span>
                         </button>
                       ) : (
                         <button
                           onClick={() => actualizarEstadoPedido(orden.id, 'entregado')}
-                          className="w-full py-3 bg-emerald-500 text-neutral-950 font-black rounded-2xl text-xs uppercase cursor-pointer flex items-center justify-center gap-2"
+                          className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black rounded-2xl text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2 transition-all"
                         >
-                          <CheckCircle className="w-4 h-4" /> Confirmar Entrega Realizada
+                          <CheckCircle className="w-4 h-4 shrink-0" />
+                          <span>Confirmar Entrega Realizada</span>
                         </button>
                       )}
                     </div>
@@ -696,7 +720,7 @@ export default function VistaDomiciliario() {
           )
         ) : (
           <div className="space-y-3">
-            {/* Barra de filtro por fecha en historial */}
+            {/* Filtro de fecha en historial */}
             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
@@ -755,7 +779,7 @@ export default function VistaDomiciliario() {
                       !pagada ? 'border-red-500/40' : 'border-neutral-800'
                     }`}
                   >
-                    <div className="space-y-0.5">
+                    <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-amber-400">
                           Orden #{ord.numero_orden || ord.id}
@@ -770,8 +794,8 @@ export default function VistaDomiciliario() {
                           {pagada ? 'PAGADO' : 'NO VA PAGO'}
                         </span>
                       </div>
-                      <p className="text-xs text-white font-semibold">
-                        {capitalizarTexto(ord.cliente_nombre) || 'Cliente'}
+                      <p className="text-xs text-white font-semibold truncate">
+                        {capitalizarPalabras(ord.cliente_nombre) || 'Cliente'}
                       </p>
                       <p className="text-[11px] text-neutral-400">
                         Pedido: $ {valorPedido.toLocaleString()} • Domi: $ {valorDomicilio.toLocaleString()}
