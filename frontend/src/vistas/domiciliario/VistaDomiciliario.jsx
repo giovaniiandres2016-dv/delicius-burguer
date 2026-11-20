@@ -13,6 +13,7 @@ import {
 import { supabase } from '../../sdk/vertizzeApi';
 
 const CLAVE_SESION_DOMI = 'vertizze_domi_sesion';
+const MARCA_DE_AGUA = 'DELICIUS BURGUER';
 
 const obtenerFechaLocalISO = (fechaInput = new Date()) => {
   const d = fechaInput instanceof Date ? fechaInput : new Date(fechaInput);
@@ -100,6 +101,24 @@ const capitalizarPalabras = (texto) => {
     })
     .join(' ');
 };
+
+function MarcaDeAgua() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none select-none fixed inset-0 z-0 overflow-hidden grid grid-cols-2 sm:grid-cols-3 place-items-center opacity-[0.04]"
+    >
+      {Array.from({ length: 12 }).map((_, idx) => (
+        <span
+          key={idx}
+          className="text-lg sm:text-xl font-black tracking-[0.28em] text-amber-400 -rotate-24 whitespace-nowrap"
+        >
+          {MARCA_DE_AGUA}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export default function VistaDomiciliario() {
   // Estados de Autenticación
@@ -360,15 +379,19 @@ export default function VistaDomiciliario() {
   // Formulario Login por PIN
   if (!domiciliario) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 font-sans select-none">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-sm w-full p-6 space-y-6 shadow-2xl relative overflow-hidden">
+      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 font-sans select-none relative overflow-hidden">
+        <MarcaDeAgua />
+
+        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-sm w-full p-6 space-y-6 shadow-2xl relative z-10 overflow-hidden">
           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 to-amber-600"></div>
 
           <div className="text-center space-y-2">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center mx-auto text-neutral-950 shadow-lg shadow-amber-500/20">
               <Bike className="w-8 h-8" />
             </div>
-            <h1 className="text-lg font-black tracking-wider text-white">VÉRTIZZE DOMICILIOS</h1>
+            <h1 className="text-lg font-black tracking-wider text-white">
+              Delicius Burguer - Domicilios
+            </h1>
             <p className="text-xs text-neutral-400">Ingreso exclusivo para repartidores</p>
           </div>
 
@@ -417,15 +440,17 @@ export default function VistaDomiciliario() {
     pedidosActivos.length > 0 ? 'En Ruta' : 'Disponible';
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col font-sans select-none">
+    <div className="min-h-screen bg-neutral-950 text-white flex flex-col font-sans select-none relative overflow-hidden">
+      <MarcaDeAgua />
+
       <header className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/20 shrink-0">
-  <Bike className="w-5 h-5" />
-</div>
+            <Bike className="w-5 h-5" />
+          </div>
           <div className="min-w-0">
             <h1 className="text-xs font-black tracking-wider text-white truncate">
-              {capitalizarPalabras(domiciliario.nombre)}
+              {capitalizarPalabras(domiciliario.nombre)} • Delicius Burguer
             </h1>
             <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
@@ -457,7 +482,7 @@ export default function VistaDomiciliario() {
       </header>
 
       {/* Métricas */}
-      <div className="p-3 bg-neutral-900/60 border-b border-neutral-800/80 grid grid-cols-3 gap-2 text-center">
+      <div className="relative z-10 p-3 bg-neutral-900/60 border-b border-neutral-800/80 grid grid-cols-3 gap-2 text-center">
         <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-2.5">
           <span className="text-[9px] text-neutral-400 font-bold uppercase block">Por Entregar</span>
           <p className="text-sm font-black text-amber-400 mt-0.5">{pedidosActivos.length}</p>
@@ -477,7 +502,7 @@ export default function VistaDomiciliario() {
       </div>
 
       {/* Pestañas */}
-      <div className="px-3 pt-3 flex gap-2">
+      <div className="relative z-10 px-3 pt-3 flex gap-2">
         <button
           onClick={() => setPestaña('activos')}
           className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -504,7 +529,7 @@ export default function VistaDomiciliario() {
       </div>
 
       {/* Lista de Servicios */}
-      <main className="flex-1 p-3 space-y-3 overflow-y-auto max-w-2xl w-full mx-auto">
+      <main className="relative z-10 flex-1 p-3 space-y-3 overflow-y-auto max-w-2xl w-full mx-auto">
         {cargandoOrdenes && ordenesAsignadas.length === 0 ? (
           <div className="py-20 text-center text-neutral-500 text-xs space-y-2">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500" />
@@ -700,7 +725,7 @@ export default function VistaDomiciliario() {
                           onClick={() => actualizarEstadoPedido(orden.id, 'en_ruta')}
                           className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-2xl text-xs uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2 transition-all"
                         >
-                          <Truck className="w-4 h-4 shrink-0" />
+                          <Bike className="w-4 h-4 shrink-0" />
                           <span>Iniciar Recorrido (En Ruta)</span>
                         </button>
                       ) : (
