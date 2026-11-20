@@ -2168,7 +2168,21 @@ const eliminarZonaCobertura = async (id) => {
           }
         };
 
+        const esOrdenCancelada = (ord) => {
+          const estOrd = String(ord.estado || '').toLowerCase().trim();
+          const estPag = String(ord.estado_pago || '').toLowerCase().trim();
+          const estDom = String(ord.estado_domicilio || '').toLowerCase().trim();
+          return (
+            ['cancelado', 'cancelada', 'anulado', 'anulada', 'rechazado', 'rechazada'].includes(estOrd) ||
+            ['cancelado', 'cancelada', 'anulado', 'anulada', 'rechazado', 'rechazada'].includes(estPag) ||
+            ['cancelado', 'cancelada', 'anulado', 'anulada', 'rechazado', 'rechazada'].includes(estDom) ||
+            estOrd.includes('cancel')
+          );
+        };
+
         const ordenesClienteHistorial = clienteSeleccionadoHistorial ? ordenes.filter(o => {
+          if (esOrdenCancelada(o)) return false;
+
           const telOrd = limpiarTelefono(o.cliente_telefono || o.telefono);
           const telCli = limpiarTelefono(clienteSeleccionadoHistorial.telefono);
           const nomOrd = (o.cliente_nombre || '').toLowerCase();
@@ -2439,9 +2453,12 @@ const eliminarZonaCobertura = async (id) => {
                                 <p className="text-xs text-neutral-300 mt-1"><strong>Ítems:</strong> {formatearItems(ord.items)}</p>
                                 <span className="text-[10px] text-neutral-500 block mt-0.5">Fecha: {ord.creado_en ? ord.creado_en.replace('T', ' ').substring(0, 16) : 'N/A'}</span>
                               </div>
-                              <div className="text-right shrink-0">
+                              <div className="text-right shrink-0 space-y-1">
                                 <p className="text-sm font-black text-white">$ {Number(ord.subtotal || ord.total || 0).toLocaleString()}</p>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block mt-1 ${ord.estado_pago?.toLowerCase() === 'pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block ${String(ord.estado || '').toLowerCase().includes('cancel') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                                  Estado: {capitalizarTexto(ord.estado || 'Pendiente')}
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded block ${ord.estado_pago?.toLowerCase() === 'pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
                                   {estadoPagoCap} ({metodoPagoCap})
                                 </span>
                               </div>
@@ -3018,61 +3035,81 @@ const eliminarZonaCobertura = async (id) => {
                     </thead>
                     <tbody className="divide-y divide-neutral-800/60">
                       {ordenesPaginadas.map(o => {
-                        const estadoPagoRaw = (o.estado_pago || 'Por Pagar').toLowerCase();
-                        const esPagado = estadoPagoRaw.includes('pagado');
-                        const estadoPedidoRaw = (o.estado || 'Pendiente').toLowerCase().trim();
-                        const estaBloqueado = estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado';
-                        const totalFinalCalculado = calcularTotalConDomicilio(o);
+  const estadoPagoRaw = (o.estado_pago || 'Por Pagar').toLowerCase();
+  const esPagado = estadoPagoRaw.includes('pagado');
+  const estadoPedidoRaw = (o.estado || 'Pendiente').toLowerCase().trim();
+  const estaBloqueado = estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado';
+  const totalFinalCalculado = calcularTotalConDomicilio(o);
 
-                        return (
-                          <tr key={o.id} className="hover:bg-neutral-800/40">
-                            <td className="py-2.5 font-bold text-white">#{o.id} <span className="text-amber-400 font-normal">({o.numero_orden})</span></td>
-                            <td className="py-2.5"><span className="px-2 py-0.5 bg-neutral-800 text-neutral-300 rounded-md text-[10px] font-bold uppercase">{capitalizarTexto(o.tipo_servicio) || 'Local'}</span></td>
-                            <td className="py-2.5 text-white font-semibold">{capitalizarTexto(o.cliente_nombre) || 'Cliente General'}</td>
-                            <td className="py-2.5 text-neutral-300 max-w-xs whitespace-pre-line leading-relaxed">
-  {formatearItems(o.items)}
-  {((o.tipo_servicio || '').toLowerCase().includes('domicilio')) && (
-    <span className="block text-amber-400 font-semibold mt-0.5">
-      • Domicilio: $ {calcularCostoDomicilio(o).toLocaleString()}
-    </span>
-  )}
-</td>
-                            <td className="py-2.5 text-white font-bold">$ {Number(totalFinalCalculado).toLocaleString()}</td>
-                            <td className="py-2.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${esPagado ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
-                                {esPagado ? 'Pagado' : 'Por Pagar'} ({capitalizarTexto(o.metodo_pago) || 'Efectivo'})
-                              </span>
-                            </td>
-                            <td className="py-2.5">
-                              {estaBloqueado ? (
-                                <span className={`px-2 py-1 rounded-lg text-[11px] font-bold inline-block ${estadoPedidoRaw === 'listo' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
-                                  {capitalizarTexto(o.estado)}
-                                </span>
-                              ) : (
-                                <select 
-                                  value={o.estado || 'Pendiente'}
-                                  onChange={(e) => cambiarEstadoOrden(o.id, e.target.value)}
-                                  className="bg-neutral-950 border border-neutral-800 rounded-lg px-2 py-1 text-[11px] text-amber-400 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
-                                >
-                                  <option value="Pendiente">Pendiente</option>
-                                  <option value="En Proceso">En Proceso</option>
-                                  <option value="Listo">Listo</option>
-                                  <option value="Entregado">Entregado</option>
-                                  <option value="Cancelado">Cancelado</option>
-                                </select>
-                              )}
-                            </td>
-                            <td className="py-2.5 text-right space-x-1">
-                              <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
-                                <Edit3 className="w-3 h-3 text-amber-400" /> Ver/Editar
-                              </button>
-                              <button onClick={() => imprimirTicket(o)} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
-                                <Printer className="w-3 h-3 text-amber-400" /> Ticket
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+  // Color de toda la fila según el estado del pedido
+  let claseFilaEstado = 'hover:bg-neutral-800/40';
+  if (estadoPedidoRaw === 'cancelado' || estadoPedidoRaw === 'cancelada') {
+    claseFilaEstado = 'bg-red-500/20 hover:bg-red-500/25';
+  } else if (estadoPedidoRaw === 'pendiente') {
+    claseFilaEstado = 'bg-orange-500/20 hover:bg-orange-500/25';
+  } else if (estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado') {
+    claseFilaEstado = 'bg-emerald-500/20 hover:bg-emerald-500/25';
+  }
+
+  return (
+    <tr key={o.id} className={`transition-colors ${claseFilaEstado}`}>
+      <td className="py-2.5 pl-2 font-bold text-white">
+        #{o.id} <span className="text-amber-400 font-normal">({o.numero_orden})</span>
+      </td>
+      <td className="py-2.5">
+        <span className="px-2 py-0.5 bg-neutral-900/80 border border-neutral-700/60 text-neutral-200 rounded-md text-[10px] font-bold uppercase">
+          {capitalizarTexto(o.tipo_servicio) || 'Local'}
+        </span>
+      </td>
+      <td className="py-2.5 text-white font-semibold">
+        {capitalizarTexto(o.cliente_nombre) || 'Cliente General'}
+      </td>
+      <td className="py-2.5 text-neutral-200 max-w-xs whitespace-pre-line leading-relaxed">
+        {formatearItems(o.items)}
+        {((o.tipo_servicio || '').toLowerCase().includes('domicilio')) && (
+          <span className="block text-amber-400 font-semibold mt-0.5">
+            • Domicilio: $ {calcularCostoDomicilio(o).toLocaleString()}
+          </span>
+        )}
+      </td>
+      <td className="py-2.5 text-white font-bold">
+        $ {Number(totalFinalCalculado).toLocaleString()}
+      </td>
+      <td className="py-2.5">
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${esPagado ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+          {esPagado ? 'Pagado' : 'Por Pagar'} ({capitalizarTexto(o.metodo_pago) || 'Efectivo'})
+        </span>
+      </td>
+      <td className="py-2.5">
+        {estaBloqueado ? (
+          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-block ${estadoPedidoRaw === 'listo' ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/40' : 'bg-blue-500/30 text-blue-200 border border-blue-400/40'}`}>
+            {capitalizarTexto(o.estado)}
+          </span>
+        ) : (
+          <select 
+            value={o.estado || 'Pendiente'}
+            onChange={(e) => cambiarEstadoOrden(o.id, e.target.value)}
+            className="bg-neutral-950/90 border border-neutral-700 rounded-lg px-2 py-1 text-[11px] text-amber-400 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+          >
+            <option value="Pendiente">Pendiente</option>
+            <option value="En Proceso">En Proceso</option>
+            <option value="Listo">Listo</option>
+            <option value="Entregado">Entregado</option>
+            <option value="Cancelado">Cancelado</option>
+          </select>
+        )}
+      </td>
+      <td className="py-2.5 pr-2 text-right space-x-1">
+        <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 text-neutral-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
+          <Edit3 className="w-3 h-3 text-amber-400" /> Ver/Editar
+        </button>
+        <button onClick={() => imprimirTicket(o)} className="bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 text-neutral-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
+          <Printer className="w-3 h-3 text-amber-400" /> Ticket
+        </button>
+      </td>
+    </tr>
+  );
+})}
                     </tbody>
                   </table>
                 </div>
