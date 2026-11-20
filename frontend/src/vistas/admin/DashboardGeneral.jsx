@@ -724,17 +724,38 @@ const cargarDatosBD = async () => {
     setModalDomiciliarioAbierto(true);
   };
 
+
   // Función para asignar o cambiar la orden a un domiciliario específico
   const asignarOrdenADomiciliario = async (ordenId, domiciliarioId) => {
+    const ordenObjetivo = ordenes.find(o => o.id === ordenId);
+    const yaEntregada =
+      (ordenObjetivo?.estado_domicilio || '').toLowerCase() === 'entregado' ||
+      (ordenObjetivo?.estado || '').toLowerCase() === 'entregado';
+
+    if (yaEntregada) {
+      alert("Esta orden ya fue entregada; su historial de entrega está bloqueado y no puede reasignarse.");
+      return;
+    }
+
     const domiIdNum = domiciliarioId ? Number(domiciliarioId) : null;
-    
-    // Actualización optimista en el estado local
-    setOrdenes(prev => prev.map(o => o.id === ordenId ? { ...o, domiciliario_id: domiIdNum } : o));
+    const domiSeleccionado = domiciliarios.find(d => d.id === domiIdNum);
+    const nombreDomiSnapshot = domiSeleccionado ? domiSeleccionado.nombre : null;
+
+    setOrdenes(prev =>
+      prev.map(o =>
+        o.id === ordenId
+          ? { ...o, domiciliario_id: domiIdNum, domiciliario_nombre: nombreDomiSnapshot }
+          : o
+      )
+    );
 
     try {
       const { error } = await supabase
         .from('ordenes')
-        .update({ domiciliario_id: domiIdNum })
+        .update({
+          domiciliario_id: domiIdNum,
+          domiciliario_nombre: nombreDomiSnapshot
+        })
         .eq('id', ordenId);
 
       if (error) throw error;
@@ -804,14 +825,23 @@ const cargarDatosBD = async () => {
   };
 
   const eliminarDomiciliario = async (id) => {
-    if (window.confirm('¿Estás seguro de inhabilitar/eliminar este domiciliario? Esta acción es irreversible.')) {
+    if (window.confirm('¿Estás seguro de inhabilitar este domiciliario? Su historial de entregas y órdenes se conservará.')) {
       try {
-        const { error } = await supabase.from('domiciliarios').delete().eq('id', id);
+        const { error } = await supabase
+          .from('domiciliarios')
+          .update({ estado: 'inhabilitado' })
+          .eq('id', id);
+
         if (error) throw error;
+
+        setDomiciliarios(prev =>
+          prev.map(d => d.id === id ? { ...d, estado: 'inhabilitado' } : d)
+        );
+        alert('Domiciliario inhabilitado. El historial de sus órdenes entregadas se mantiene intacto.');
         cargarDatosBD();
       } catch (error) {
-        console.error("Error al eliminar domiciliario:", error.message);
-        alert("No se pudo eliminar el registro del domiciliario.");
+        console.error("Error al inhabilitar domiciliario:", error.message);
+        alert("No se pudo inhabilitar el domiciliario: " + error.message);
       }
     }
   };
@@ -2461,7 +2491,7 @@ const eliminarZonaCobertura = async (id) => {
               <div className="lg:col-span-7 space-y-2.5">
                 <div className="flex justify-between items-center bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-xl">
                   <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-amber-500" /> Repartidores Activos ({domiciliarios.length})
+                    <Truck className="w-3.5 h-3.5 text-amber-500" /> Repartidores Activos ({domiciliarios.filter(d => (d.estado || '').toLowerCase() !== 'inhabilitado' && d.activo !== false).length})
                   </h3>
                   <button onClick={abrirModalCrearDomiciliario} className="bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer">
                     <Plus className="w-3 h-3" /> Nuevo Domiciliario
@@ -2470,11 +2500,13 @@ const eliminarZonaCobertura = async (id) => {
 
                 {cargandoDomiciliarios ? (
                   <div className="py-10 text-center text-neutral-500 text-xs">Cargando domiciliarios...</div>
-                ) : domiciliarios.length === 0 ? (
-                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 text-center text-xs text-neutral-400">No hay domiciliarios registrados.</div>
+                ) : domiciliarios.filter(d => (d.estado || '').toLowerCase() !== 'inhabilitado' && d.activo !== false).length === 0 ? (
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 text-center text-xs text-neutral-400">No hay domiciliarios activos registrados.</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {domiciliarios.map(domi => {
+                    {domiciliarios
+                      .filter(d => (d.estado || '').toLowerCase() !== 'inhabilitado' && d.activo !== false)
+                      .map(domi => {
                       const ordenesDomi = ordenes.filter(o => {
                         const esDeDomi = o.domiciliario_id === domi.id;
                         const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
@@ -2509,21 +2541,44 @@ const eliminarZonaCobertura = async (id) => {
                                 className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-[10px] text-white focus:outline-none focus:border-amber-500 font-bold"
                               />
                               <div className="max-h-24 overflow-y-auto space-y-0.5">
-                                {ordenes.filter(o => (o.tipo_servicio || '').toLowerCase().includes('domicilio') && !o.domiciliario_id && (String(o.numero_orden || o.id).toLowerCase().includes((busquedaOrdenDomi[domi.id] || '').toLowerCase()))).slice(0, 4).map(ord => {
-                                  const ubicacionOrd = (ord.ubicacion_detalle || ord.direccion || '').toLowerCase();
-                                  const zonaMatch = coberturaZonas.find(z => z.activo && ubicacionOrd.includes(z.barrio_zona.toLowerCase()));
-                                  const nombreZona = zonaMatch ? zonaMatch.barrio_zona : '';
+                                {ordenes
+                                  .filter(o => {
+                                    const esDomi = (o.tipo_servicio || '').toLowerCase().includes('domicilio');
+                                    const sinAsignar = !o.domiciliario_id;
+                                    const noEntregada =
+                                      (o.estado_domicilio || '').toLowerCase() !== 'entregado' &&
+                                      (o.estado || '').toLowerCase() !== 'entregado';
+                                    const coincideBusq = String(o.numero_orden || o.id)
+                                      .toLowerCase()
+                                      .includes((busquedaOrdenDomi[domi.id] || '').toLowerCase());
+                                    return esDomi && sinAsignar && noEntregada && coincideBusq;
+                                  })
+                                  .slice(0, 4)
+                                  .map(ord => {
+                                    const ubicacionOrd = (ord.ubicacion_detalle || ord.direccion || '').toLowerCase();
+                                    const zonaMatch = coberturaZonas.find(
+                                      z => z.activo && ubicacionOrd.includes(z.barrio_zona.toLowerCase())
+                                    );
+                                    const nombreZona = zonaMatch ? zonaMatch.barrio_zona : '';
 
-                                  return (
-                                    <div key={ord.id} onClick={() => asignarOrdenADomiciliario(ord.id, domi.id)} className="bg-neutral-900 hover:bg-amber-500/10 p-1 rounded cursor-pointer flex justify-between items-center text-[10px]">
-                                      <span className="font-bold text-amber-400">
-                                        #{ord.numero_orden || ord.id} - {capitalizarTexto(ord.cliente_nombre)}
-                                        {nombreZona && <span className="text-neutral-400 font-normal"> ({capitalizarTexto(nombreZona)})</span>}
-                                      </span>
-                                      <span className="text-[9px] text-neutral-400 underline">Asignar</span>
-                                    </div>
-                                  );
-                                })}
+                                    return (
+                                      <div
+                                        key={ord.id}
+                                        onClick={() => asignarOrdenADomiciliario(ord.id, domi.id)}
+                                        className="bg-neutral-900 hover:bg-amber-500/10 p-1 rounded cursor-pointer flex justify-between items-center text-[10px]"
+                                      >
+                                        <span className="font-bold text-amber-400">
+                                          #{ord.numero_orden || ord.id} - {capitalizarTexto(ord.cliente_nombre)}
+                                          {nombreZona && (
+                                            <span className="text-neutral-400 font-normal">
+                                              {' '}({capitalizarTexto(nombreZona)})
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className="text-[9px] text-neutral-400 underline">Asignar</span>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                             </div>
                           </div>
