@@ -592,7 +592,7 @@ const canalRealtime = supabase
             );
           } else if (payload.eventType === 'INSERT') {
             setOrdenes(prevOrdenes => [payload.new, ...prevOrdenes]);
-            await sincronizarClientesDesdeOrdenes([payload.new]); // Solo sincroniza el cliente nuevo
+            await sincronizarClientesDesdeOrdenes([payload.new]);
           } else if (payload.eventType === 'DELETE') {
             setOrdenes(prevOrdenes => prevOrdenes.filter(ord => ord.id !== payload.old.id));
           }
@@ -1710,10 +1710,10 @@ const eliminarZonaCobertura = async (id) => {
         });
 
         const ordenesPendientesCobro = ordenes.filter(o => {
-          const estOrden = (o.estado || '').toLowerCase().trim();
-          if (estOrden === 'cancelado' || estOrden === 'cancelada') return false;
+          const estOrden = String(o.estado || '').toLowerCase().trim();
+          const estPag = String(o.estado_pago || '').toLowerCase().trim();
+          if (estOrden.includes('cancel') || estPag.includes('cancel')) return false;
 
-          const estPag = o.estado_pago ? o.estado_pago.toLowerCase().trim() : '';
           return estPag !== 'pagado';
         });
 
@@ -2744,11 +2744,21 @@ const eliminarZonaCobertura = async (id) => {
         );
       }
       case 'pagos': {
+        const estadosCancelados = ['cancelado', 'cancelada', 'anulado', 'anulada', 'rechazado', 'rechazada'];
         const ordenesPendientesPago = ordenes.filter(o => {
-          const estadoOrden = (o.estado || '').toLowerCase().trim();
-          if (estadoOrden === 'cancelado' || estadoOrden === 'cancelada') return false;
+          const estadoOrden = String(o.estado || '').toLowerCase().trim();
+          const estadoPago = String(o.estado_pago || '').toLowerCase().trim();
+          const estadoDom = String(o.estado_domicilio || '').toLowerCase().trim();
 
-          const estadoPago = o.estado_pago ? o.estado_pago.toLowerCase().trim() : '';
+          if (
+            estadosCancelados.includes(estadoOrden) ||
+            estadosCancelados.includes(estadoPago) ||
+            estadosCancelados.includes(estadoDom) ||
+            estadoOrden.includes('cancel')
+          ) {
+            return false;
+          }
+
           return estadoPago !== 'pagado';
         });
 
