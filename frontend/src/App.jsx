@@ -11,7 +11,7 @@ import DashboardGeneral from './vistas/admin/DashboardGeneral';
 // Vista de Cocina (KDS)
 import PantallaCocina from './vistas/cocina/PantallaCocina';
 
-// Vista de Domiciliarios
+// Vista de Domiciliarios (Multiusuario con sesión propia por PIN)
 import VistaDomiciliario from './vistas/domiciliario/VistaDomiciliario';
 
 // Vistas del Cliente (Públicas)
@@ -30,7 +30,7 @@ export default function App() {
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
   const [sesionActiva, setSesionActiva] = useState(false);
-  const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'domiciliario', 'colaborador'
+  const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'colaborador'
 
   useEffect(() => {
     const actualizarRuta = () => setRutaActual(window.location.pathname);
@@ -116,30 +116,14 @@ export default function App() {
   };
 
   // ==========================================================================
-  // ENRUTAMIENTO POR URL (Administración / Cocina / Domiciliario / Login)
+  // ENRUTAMIENTO POR URL (Domiciliario / Administración / Cocina / Login)
   // ==========================================================================
   const ruta = (rutaActual || window.location.pathname).toLowerCase();
 
-  // Acceso directo a la vista de Domiciliarios (/domiciliario)
+  // Vista independiente de Domiciliarios (/domiciliario)
+  // Cada repartidor entra con su PIN y gestiona su propia sesión sin afectar la sesión general
   if (ruta.includes('/domiciliario')) {
-    return (
-      <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
-        <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
-          <span className="text-amber-400 font-bold flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-            Modo Domiciliario Activo
-          </span>
-          <button
-            type="button"
-            onClick={cerrarSesionGeneral}
-            className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
-          >
-            Salir / Cerrar Sesión
-          </button>
-        </div>
-        <VistaDomiciliario />
-      </div>
-    );
+    return <VistaDomiciliario />;
   }
 
   if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
@@ -153,8 +137,6 @@ export default function App() {
             setSesionActiva(true);
             if (rolNormalizado === 'cocina' && !ruta.includes('/cocina')) {
               navegarA('/cocina');
-            } else if (rolNormalizado === 'domiciliario' && !ruta.includes('/domiciliario')) {
-              navegarA('/domiciliario');
             } else if (
               (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') &&
               !ruta.includes('/admin')
@@ -183,27 +165,6 @@ export default function App() {
             </button>
           </div>
           <PantallaCocina />
-        </div>
-      );
-    }
-
-    if (rolSesion === 'domiciliario') {
-      return (
-        <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
-          <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
-            <span className="text-amber-400 font-bold flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-              Modo Domiciliario Activo
-            </span>
-            <button
-              type="button"
-              onClick={cerrarSesionGeneral}
-              className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
-            >
-              Cerrar Sesión
-            </button>
-          </div>
-          <VistaDomiciliario />
         </div>
       );
     }
