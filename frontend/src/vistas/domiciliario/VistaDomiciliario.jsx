@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Truck, Key, LogOut, CheckCircle, Clock, MapPin,
+  Bike, Key, LogOut, CheckCircle, Clock, MapPin,
   Phone, AlertCircle, RefreshCw, Navigation, History, Bell, Calendar
 } from 'lucide-react';
 import { supabase } from '../../sdk/vertizzeApi';
@@ -366,7 +366,7 @@ export default function VistaDomiciliario() {
 
           <div className="text-center space-y-2">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center mx-auto text-neutral-950 shadow-lg shadow-amber-500/20">
-              <Truck className="w-8 h-8" />
+              <Bike className="w-8 h-8" />
             </div>
             <h1 className="text-lg font-black tracking-wider text-white">VÉRTIZZE DOMICILIOS</h1>
             <p className="text-xs text-neutral-400">Ingreso exclusivo para repartidores</p>
@@ -421,8 +421,8 @@ export default function VistaDomiciliario() {
       <header className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-black text-xs shadow-md shadow-amber-500/20 shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
+  <Bike className="w-5 h-5" />
+</div>
           <div className="min-w-0">
             <h1 className="text-xs font-black tracking-wider text-white truncate">
               {capitalizarPalabras(domiciliario.nombre)}
