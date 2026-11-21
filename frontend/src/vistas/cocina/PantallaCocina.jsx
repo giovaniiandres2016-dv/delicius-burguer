@@ -1116,12 +1116,43 @@ const guardarProducto = async (e) => {
     }
   };
 
+  const esEstadoCancelado = (valor) => {
+    const est = String(valor || '').toLowerCase().trim();
+    return ['cancelado', 'cancelada', 'anulado', 'anulada', 'rechazado', 'rechazada'].includes(est) || est.includes('cancel');
+  };
+
+  const esPedidoCancelado = (orden) => {
+    if (!orden) return false;
+    return (
+      esEstadoCancelado(orden.estado) ||
+      esEstadoCancelado(orden.estado_pago) ||
+      esEstadoCancelado(orden.estado_domicilio)
+    );
+  };
+
+  const esPedidoConfirmado = (orden) => {
+    if (!orden || esPedidoCancelado(orden)) return false;
+    if (orden.confirmado === false) return false;
+    const est = String(orden.estado || '').toLowerCase().trim();
+    return est !== '' && est !== 'pendiente' && est !== 'sin confirmar' && est !== 'borrador';
+  };
+
+  const esEstadoFinalBloqueado = (orden) => {
+    if (!orden) return false;
+    if (esPedidoCancelado(orden)) return true;
+    const est = String(orden.estado || '').toLowerCase().trim();
+    return est === 'listo' || est === 'entregado';
+  };
+
   const cambiarEstadoOrden = async (id, nuevoEstado) => {
     const ordenActual = ordenes.find(o => o.id === id);
     if (ordenActual) {
-      const estadoDb = (ordenActual.estado || '').toLowerCase().trim();
-      if (estadoDb === 'listo' || estadoDb === 'entregado') {
-        alert('Esta orden ya se encuentra en estado Listo/Entregado y está bloqueada contra modificaciones.');
+      if (esPedidoCancelado(ordenActual)) {
+        alert('Esta orden está Cancelada y su estado no puede modificarse.');
+        return;
+      }
+      if (esEstadoFinalBloqueado(ordenActual)) {
+        alert('Esta orden ya se encuentra marcada como Listo/Entregado y está bloqueada contra modificaciones.');
         return;
       }
     }
@@ -1208,6 +1239,10 @@ const guardarProducto = async (e) => {
 
   const guardarCambiosOrdenModal = async () => {
     if (!ordenSeleccionada) return;
+    if (esEstadoFinalBloqueado(ordenSeleccionada)) {
+      alert('No se puede editar una orden Cancelada, Lista o Entregada.');
+      return;
+    }
 
     const nuevoSubtotal = itemsEditables.reduce((acc, curr) => acc + (Number(curr.precio || 0) * Number(curr.cantidad || 1)), 0);
 
@@ -1654,6 +1689,7 @@ const eliminarZonaCobertura = async (id) => {
     switch (vistaActual) {
       case 'resumen': {
         const ordenesFiltradas = ordenes.filter(o => {
+          if (!esPedidoConfirmado(o)) return false;
           if (!fechaInicio || !fechaFin) return true;
           const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
           return fechaCreacion >= fechaInicio && fechaCreacion <= fechaFin;
@@ -1662,7 +1698,7 @@ const eliminarZonaCobertura = async (id) => {
         const ventasTotales = ordenesFiltradas
           .filter(o => {
             const esPagado = o.estado_pago && o.estado_pago.toLowerCase() === 'pagado';
-            const estadoOp = o.estado ? o.estado.toLowerCase() : '';
+            const estadoOp = o.estado ? o.estado.toLowerCase().trim() : '';
             return esPagado && (estadoOp === 'listo' || estadoOp === 'entregado');
           })
           .reduce((acc, curr) => acc + Number(curr.subtotal || 0), 0);
@@ -1678,7 +1714,7 @@ const eliminarZonaCobertura = async (id) => {
           .filter(o => o.estado_pago?.toLowerCase() === 'pagado' && (!o.metodo_pago || !o.metodo_pago.toLowerCase().includes('efectivo')))
           .reduce((acc, curr) => acc + Number(curr.subtotal || 0), 0);
 
-        const totalClientesUnicos = new Set(ordenesFiltradas.map(o => o.cliente_nombre)).size;
+        const totalClientesUnicos = new Set(ordenesFiltradas.map(o => o.cliente_nombre).filter(Boolean)).size;
 
         const conteoProductos = {};
         ordenesFiltradas.forEach(o => {
@@ -3038,7 +3074,8 @@ const eliminarZonaCobertura = async (id) => {
   const estadoPagoRaw = (o.estado_pago || 'Por Pagar').toLowerCase();
   const esPagado = estadoPagoRaw.includes('pagado');
   const estadoPedidoRaw = (o.estado || 'Pendiente').toLowerCase().trim();
-  const estaBloqueado = estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado';
+  const estaCancelada = esPedidoCancelado(o);
+  const estaBloqueado = esEstadoFinalBloqueado(o);
   const totalFinalCalculado = calcularTotalConDomicilio(o);
 
   // Color de toda la fila según el estado del pedido
@@ -3082,7 +3119,13 @@ const eliminarZonaCobertura = async (id) => {
       </td>
       <td className="py-2.5">
         {estaBloqueado ? (
-          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-block ${estadoPedidoRaw === 'listo' ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/40' : 'bg-blue-500/30 text-blue-200 border border-blue-400/40'}`}>
+          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-block ${
+            estaCancelada
+              ? 'bg-red-500/30 text-red-200 border border-red-400/40'
+              : estadoPedidoRaw === 'listo'
+                ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/40'
+                : 'bg-blue-500/30 text-blue-200 border border-blue-400/40'
+          }`}>
             {capitalizarTexto(o.estado)}
           </span>
         ) : (
@@ -3100,9 +3143,11 @@ const eliminarZonaCobertura = async (id) => {
         )}
       </td>
       <td className="py-2.5 pr-2 text-right space-x-1">
-        <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 text-neutral-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
-          <Edit3 className="w-3 h-3 text-amber-400" /> Ver/Editar
-        </button>
+        {!estaBloqueado && (
+          <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 text-neutral-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
+            <Edit3 className="w-3 h-3 text-amber-400" /> Editar
+          </button>
+        )}
         <button onClick={() => imprimirTicket(o)} className="bg-neutral-900/90 hover:bg-neutral-800 border border-neutral-700/60 text-neutral-200 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
           <Printer className="w-3 h-3 text-amber-400" /> Ticket
         </button>
@@ -3246,8 +3291,7 @@ const eliminarZonaCobertura = async (id) => {
 
       case 'contabilidad': {
         const ordenesFiltradas = ordenes.filter(o => {
-          const estOrden = (o.estado || '').toLowerCase().trim();
-          if (estOrden === 'cancelado' || estOrden === 'cancelada') return false;
+          if (!esPedidoConfirmado(o)) return false;
 
           if (!fechaInicio || !fechaFin) return true;
           const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
