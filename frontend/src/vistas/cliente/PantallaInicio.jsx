@@ -23,10 +23,13 @@ export default function PantallaInicio({ alSeleccionarModo }) {
       {/* Contenido Principal Ajustado sin Scroll */}
       <main className="flex flex-col items-center justify-center text-center space-y-3 sm:space-y-4 w-full max-w-4xl mx-auto my-auto px-2">
         
-        {/* Espacio reservado para el logo del cliente (tamaño optimizado) */}
-        <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl bg-neutral-900 border-2 border-dashed border-neutral-700 flex items-center justify-center text-neutral-500 text-[11px] text-center p-2 shadow-inner shrink-0">
-          {/* Reemplaza este div o añade tu etiqueta <img src="..." alt="Logo" /> cuando lo tengas */}
-          <span>[ Logo Cliente ]</span>
+        {/* Logo de Delicius Burguer con tamaño equilibrado */}
+        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-2xl bg-neutral-900/90 border border-amber-500/30 flex items-center justify-center p-2 shadow-2xl shadow-amber-500/10 shrink-0 overflow-hidden">
+          <img
+            src="/logo-delicius.png"
+            alt="Logo Delicius Burguer"
+            className="w-full h-full object-contain"
+          />
         </div>
 
         <div className="space-y-1.5 max-w-md px-2">
