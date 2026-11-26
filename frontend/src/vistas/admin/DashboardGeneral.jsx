@@ -2628,12 +2628,8 @@ const eliminarZonaCobertura = async (id) => {
                                       estadoLimpio !== 'cancelado';
 
                                     const estaDisponibleParaAsignar =
-                                      noEntregada &&
-                                      (estadoLimpio === '' ||
-                                        estadoLimpio.includes('list') ||
-                                        estadoLimpio.includes('camino') ||
-                                        estadoLimpio.includes('pend') ||
-                                        estadoLimpio.includes('proceso'));
+                                    noEntregada &&
+                                    (estadoLimpio.includes('list') || estadoLimpio.includes('camino'));
 
                                     const sinAsignar =
                                       o.domiciliario_id === null ||
