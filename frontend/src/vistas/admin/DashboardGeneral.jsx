@@ -587,21 +587,42 @@ useEffect(() => {
       setCargandoDomiciliarios(false);
     }, 5000);
 
-const canalRealtime = supabase
+const refrescarOrdenesRapido = async () => {
+      const { data, error } = await supabase
+        .from('ordenes')
+        .select('*')
+        .order('id', { ascending: false });
+      if (!error && data) {
+        setOrdenes(data);
+      }
+    };
+
+    const canalRealtime = supabase
       .channel('cambios-vertizze-db')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes' },
         async (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            setOrdenes(prevOrdenes => 
-              prevOrdenes.map(ord => ord.id === payload.new.id ? { ...ord, ...payload.new } : ord)
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            setOrdenes(prevOrdenes => {
+              const existe = prevOrdenes.some(ord => String(ord.id) === String(payload.new.id));
+              if (!existe) return [payload.new, ...prevOrdenes];
+              return prevOrdenes.map(ord =>
+                String(ord.id) === String(payload.new.id) ? { ...ord, ...payload.new } : ord
+              );
+            });
+            await refrescarOrdenesRapido();
+          } else if (payload.eventType === 'INSERT' && payload.new) {
+            setOrdenes(prevOrdenes => {
+              const yaExiste = prevOrdenes.some(ord => String(ord.id) === String(payload.new.id));
+              return yaExiste ? prevOrdenes : [payload.new, ...prevOrdenes];
+            });
+            await sincronizarClientesDesdeOrdenes([payload.new]);
+            await refrescarOrdenesRapido();
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            setOrdenes(prevOrdenes =>
+              prevOrdenes.filter(ord => String(ord.id) !== String(payload.old.id))
             );
-          } else if (payload.eventType === 'INSERT') {
-            setOrdenes(prevOrdenes => [payload.new, ...prevOrdenes]);
-            await sincronizarClientesDesdeOrdenes([payload.new]); // Solo sincroniza el cliente nuevo
-          } else if (payload.eventType === 'DELETE') {
-            setOrdenes(prevOrdenes => prevOrdenes.filter(ord => ord.id !== payload.old.id));
           }
         }
       )
@@ -637,6 +658,25 @@ const canalRealtime = supabase
       supabase.removeChannel(canalRealtime);
     };
   }, []);
+
+  // Refresco inmediato al entrar al módulo de domiciliarios/órdenes/pagos y respaldo en vivo
+  useEffect(() => {
+    if (!['domiciliarios', 'ordenes', 'pagos', 'resumen'].includes(vistaActual)) return;
+
+    const sincronizarOrdenesEnVivo = async () => {
+      const { data, error } = await supabase
+        .from('ordenes')
+        .select('*')
+        .order('id', { ascending: false });
+      if (!error && data) {
+        setOrdenes(data);
+      }
+    };
+
+    sincronizarOrdenesEnVivo();
+    const intervalo = setInterval(sincronizarOrdenesEnVivo, 4000);
+    return () => clearInterval(intervalo);
+  }, [vistaActual]);
 
 const cargarDatosBD = async () => {
     try {
