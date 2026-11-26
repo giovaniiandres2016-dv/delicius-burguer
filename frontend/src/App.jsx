@@ -85,6 +85,7 @@ const leerSesionModulo = (modulo) => {
 
 export default function App() {
   const [rutaActual, setRutaActual] = useState(window.location.pathname);
+  const [hashActual, setHashActual] = useState(window.location.hash);
 
   const [modoPedido, setModoPedido] = useState(null);
   const [pasoCliente, setPasoCliente] = useState('inicio');
@@ -106,10 +107,12 @@ export default function App() {
   useEffect(() => {
     const actualizarRuta = () => {
       setRutaActual(window.location.pathname);
+      setHashActual(window.location.hash);
       sincronizarSesiones();
     };
 
     window.addEventListener('popstate', actualizarRuta);
+    window.addEventListener('hashchange', actualizarRuta);
     window.addEventListener('storage', sincronizarSesiones);
 
     const originalPushState = window.history.pushState;
@@ -122,6 +125,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('popstate', actualizarRuta);
+      window.removeEventListener('hashchange', actualizarRuta);
       window.removeEventListener('storage', sincronizarSesiones);
       window.history.pushState = originalPushState;
     };
@@ -130,6 +134,7 @@ export default function App() {
   const navegarA = (nuevaRuta) => {
     window.history.pushState({}, '', nuevaRuta);
     setRutaActual(nuevaRuta);
+    setHashActual(window.location.hash);
   };
 
   const cerrarSesionModulo = (modulo) => {
@@ -185,12 +190,19 @@ export default function App() {
   };
 
   // ==========================================================================
-  // ENRUTAMIENTO POR URL (Domiciliario / Administración / Cocina / Login)
+  // ENRUTAMIENTO POR URL (Domi / Domiciliario / Administración / Cocina / Login)
   // ==========================================================================
   const ruta = (rutaActual || window.location.pathname).toLowerCase();
+  const hash = (hashActual || window.location.hash || '').toLowerCase();
 
-  // Vista independiente de Domiciliarios (/domiciliario)
-  if (ruta.includes('/domiciliario')) {
+  // Vista independiente de Domiciliarios (/domi y /domiciliario)
+  if (
+    ruta.includes('/domi') ||
+    ruta.includes('/domiciliario') ||
+    ruta.includes('/repartidor') ||
+    hash.includes('domi') ||
+    hash.includes('domiciliario')
+  ) {
     return <VistaDomiciliario />;
   }
 
