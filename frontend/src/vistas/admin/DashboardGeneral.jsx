@@ -2574,18 +2574,23 @@ const eliminarZonaCobertura = async (id) => {
                                     const esDomi = (o.tipo_servicio || '').toLowerCase().trim().includes('domicilio');
                                     const estadoLimpio = (o.estado || '').toLowerCase().trim();
                                     const estaLista = estadoLimpio === 'listo' || estadoLimpio === 'lista';
+                                    const sinAsignar =
+                                      o.domiciliario_id === null ||
+                                      o.domiciliario_id === undefined ||
+                                      String(o.domiciliario_id).trim() === '' ||
+                                      String(o.domiciliario_id).toLowerCase() === 'null' ||
+                                      Number(o.domiciliario_id) === 0;
                                     const noEntregada =
                                       (o.estado_domicilio || '').toLowerCase().trim() !== 'entregado' &&
                                       estadoLimpio !== 'entregado' &&
                                       estadoLimpio !== 'cancelado';
-                                    const noEsDeEsteMismoDomi = Number(o.domiciliario_id) !== Number(domi.id);
                                     const termino = (busquedaOrdenDomi[domi.id] || '').toLowerCase().trim();
                                     const coincideBusq =
                                       !termino ||
                                       String(o.numero_orden || '').toLowerCase().includes(termino) ||
                                       String(o.id || '').toLowerCase().includes(termino) ||
                                       (o.cliente_nombre || '').toLowerCase().includes(termino);
-                                    return esDomi && estaLista && noEntregada && noEsDeEsteMismoDomi && coincideBusq;
+                                    return esDomi && estaLista && sinAsignar && noEntregada && coincideBusq;
                                   })
                                   .sort((a, b) => Number(b.id) - Number(a.id))
                                   .map(ord => {
