@@ -267,6 +267,13 @@ const cambiarRol = (nuevoRol) => {
   // Estado para ticket de impresión
   const [ordenImprimiendo, setOrdenImprimiendo] = useState(null);
 
+  // Helper centralizado para detectar órdenes canceladas de forma consistente
+  const esOrdenCancelada = (orden) => {
+    const estadoPedido = (orden?.estado || '').toLowerCase().trim();
+    const estadoDomicilio = (orden?.estado_domicilio || '').toLowerCase().trim();
+    return estadoPedido === 'cancelado' || estadoDomicilio === 'cancelado';
+  };
+
   // Función auxiliar para formatear a mayúscula inicial (Capitalize)
   const capitalizarTexto = (texto) => {
     if (!texto) return '';
@@ -1119,6 +1126,10 @@ const guardarProducto = async (e) => {
   const cambiarEstadoOrden = async (id, nuevoEstado) => {
     const ordenActual = ordenes.find(o => o.id === id);
     if (ordenActual) {
+      if (esOrdenCancelada(ordenActual)) {
+        alert('Esta orden está Cancelada y bloqueada; no se puede modificar su estado ni ningún otro campo.');
+        return;
+      }
       const estadoDb = (ordenActual.estado || '').toLowerCase().trim();
       if (estadoDb === 'listo' || estadoDb === 'entregado') {
         alert('Esta orden ya se encuentra en estado Listo/Entregado y está bloqueada contra modificaciones.');
@@ -1140,6 +1151,12 @@ const guardarProducto = async (e) => {
   };
 
   const registrarPagoOrden = async (id, nuevoEstadoPago, nuevoMetodoPago) => {
+    const ordenObjetivo = ordenes.find(o => o.id === id);
+    if (ordenObjetivo && esOrdenCancelada(ordenObjetivo)) {
+      alert('No se puede cobrar ni modificar el pago de una orden Cancelada.');
+      return;
+    }
+
     setOrdenes(prevOrdenes => 
       prevOrdenes.map(ord => ord.id === id ? { ...ord, estado_pago: nuevoEstadoPago, metodo_pago: nuevoMetodoPago } : ord)
     );
@@ -1154,6 +1171,10 @@ const guardarProducto = async (e) => {
   };
 
   const abrirDetalleOrden = (o) => {
+    if (esOrdenCancelada(o)) {
+      alert('La orden está Cancelada y no permite editar ítems, observaciones ni ningún campo.');
+      return;
+    }
     setOrdenSeleccionada(o);
     setObservacionesEditables(o.observaciones || o.nota || '');
     setBusquedaProductoModal('');
@@ -1209,6 +1230,12 @@ const guardarProducto = async (e) => {
   const guardarCambiosOrdenModal = async () => {
     if (!ordenSeleccionada) return;
 
+    if (esOrdenCancelada(ordenSeleccionada)) {
+      alert('No se pueden guardar cambios: la orden está Cancelada.');
+      setModalOrdenAbierto(false);
+      return;
+    }
+
     const nuevoSubtotal = itemsEditables.reduce((acc, curr) => acc + (Number(curr.precio || 0) * Number(curr.cantidad || 1)), 0);
 
     const datosActualizacion = {
@@ -1239,6 +1266,7 @@ const guardarProducto = async (e) => {
     const fechaObjetivo = fechaDia || obtenerFechaLocalStr();
 
     const ordenesPagadasDelDia = ordenes.filter(o => {
+      if (esOrdenCancelada(o)) return false;
       const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
       const esPagado = o.estado_pago && String(o.estado_pago).toLowerCase().trim() === 'pagado';
       return fechaCreacion === fechaObjetivo && esPagado;
@@ -1395,6 +1423,7 @@ const exportarACSV = () => {
       return;
     }
   const ordenesFiltradas = ordenes.filter(o => {
+      if (esOrdenCancelada(o)) return false;
       const esPagado = o.estado_pago && String(o.estado_pago).toLowerCase().trim() === 'pagado';
       if (!esPagado) return false;
       if (!fechaInicio || !fechaFin) return true;
@@ -1648,6 +1677,7 @@ const eliminarZonaCobertura = async (id) => {
     switch (vistaActual) {
       case 'resumen': {
         const ordenesFiltradas = ordenes.filter(o => {
+          if (esOrdenCancelada(o)) return false;
           if (!fechaInicio || !fechaFin) return true;
           const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
           return fechaCreacion >= fechaInicio && fechaCreacion <= fechaFin;
@@ -1704,6 +1734,7 @@ const eliminarZonaCobertura = async (id) => {
         });
 
         const ordenesPendientesCobro = ordenes.filter(o => {
+          if (esOrdenCancelada(o)) return false;
           const estPag = o.estado_pago ? o.estado_pago.toLowerCase().trim() : '';
           return estPag !== 'pagado';
         });
@@ -2736,6 +2767,7 @@ const eliminarZonaCobertura = async (id) => {
       }
       case 'pagos': {
         const ordenesPendientesPago = ordenes.filter(o => {
+          if (esOrdenCancelada(o)) return false;
           const estadoPago = o.estado_pago ? o.estado_pago.toLowerCase().trim() : '';
           return estadoPago !== 'pagado';
         });
@@ -2999,7 +3031,8 @@ const eliminarZonaCobertura = async (id) => {
                         const estadoPagoRaw = (o.estado_pago || 'Por Pagar').toLowerCase();
                         const esPagado = estadoPagoRaw.includes('pagado');
                         const estadoPedidoRaw = (o.estado || 'Pendiente').toLowerCase().trim();
-                        const estaBloqueado = estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado';
+                        const esCancelada = esOrdenCancelada(o);
+                        const estaBloqueado = esCancelada || estadoPedidoRaw === 'listo' || estadoPedidoRaw === 'entregado';
                         const totalFinalCalculado = calcularTotalConDomicilio(o);
 
                         return (
@@ -3023,7 +3056,7 @@ const eliminarZonaCobertura = async (id) => {
                             </td>
                             <td className="py-2.5">
                               {estaBloqueado ? (
-                                <span className={`px-2 py-1 rounded-lg text-[11px] font-bold inline-block ${estadoPedidoRaw === 'listo' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
+                                <span className={`px-2 py-1 rounded-lg text-[11px] font-bold inline-block ${esCancelada ? 'bg-red-500/20 text-red-400 border border-red-500/30' : estadoPedidoRaw === 'listo' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
                                   {capitalizarTexto(o.estado)}
                                 </span>
                               ) : (
@@ -3041,9 +3074,11 @@ const eliminarZonaCobertura = async (id) => {
                               )}
                             </td>
                             <td className="py-2.5 text-right space-x-1">
-                              <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
-                                <Edit3 className="w-3 h-3 text-amber-400" /> Ver/Editar
-                              </button>
+                              {!esCancelada && (
+                                <button onClick={() => abrirDetalleOrden(o)} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
+                                  <Edit3 className="w-3 h-3 text-amber-400" /> Ver/Editar
+                                </button>
+                              )}
                               <button onClick={() => imprimirTicket(o)} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-2 py-1 rounded-lg font-bold transition-all cursor-pointer inline-flex items-center gap-1 text-[11px]">
                                 <Printer className="w-3 h-3 text-amber-400" /> Ticket
                               </button>
@@ -3188,13 +3223,14 @@ const eliminarZonaCobertura = async (id) => {
       case 'contabilidad': {
         const hoyContabilidad = obtenerFechaLocalStr();
         const ordenesFiltradas = ordenes.filter(o => {
+          if (esOrdenCancelada(o)) return false;
           if (!fechaInicio || !fechaFin) return true;
           const fechaCreacion = o.creado_en ? o.creado_en.split('T')[0] : '';
           return fechaCreacion >= fechaInicio && fechaCreacion <= fechaFin;
         });
 
         const totalVentasPeriodo = ordenesFiltradas
-          .filter(o => o.estado_pago === 'Pagado')
+          .filter(o => (o.estado_pago || '').toLowerCase().trim() === 'pagado')
           .reduce((acc, curr) => acc + Number(curr.subtotal || 0), 0);
         
         const totalOrdenesPeriodo = ordenesFiltradas.length;
@@ -3205,7 +3241,7 @@ const eliminarZonaCobertura = async (id) => {
             acc[fecha] = { fecha, totalVentas: 0, cantidadPedidos: 0, efectivo: 0, digital: 0 };
           }
           acc[fecha].cantidadPedidos += 1;
-          if (curr.estado_pago === 'Pagado') {
+          if ((curr.estado_pago || '').toLowerCase().trim() === 'pagado') {
             acc[fecha].totalVentas += Number(curr.subtotal || 0);
             if (curr.metodo_pago && curr.metodo_pago.toLowerCase().includes('efectivo')) {
               acc[fecha].efectivo += Number(curr.subtotal || 0);
