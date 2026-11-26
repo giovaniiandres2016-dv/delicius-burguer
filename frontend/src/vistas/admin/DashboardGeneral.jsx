@@ -788,7 +788,7 @@ const cargarDatosBD = async () => {
 
     setOrdenes(prev =>
       prev.map(o =>
-        o.id === ordenId
+        Number(o.id) === Number(ordenId)
           ? { ...o, domiciliario_id: domiIdNum }
           : o
       )
@@ -2611,35 +2611,37 @@ const eliminarZonaCobertura = async (id) => {
                              <div className="max-h-28 overflow-y-auto space-y-0.5">
                                 {ordenes
                                   .filter(o => {
+                                    // 1. Solo órdenes de domicilio
                                     const servicioTexto = String(
                                       o.tipo_servicio || o.tipo || o.modalidad || ''
                                     ).toLowerCase().trim();
-                                    // Si tipo_servicio está vacío, no la bloquea; si está definido, exige domicilio
-                                    const esDomi = servicioTexto === '' || servicioTexto.includes('domicilio');
+                                    const esDomi = servicioTexto.includes('domicilio');
 
+                                    // 2. Solo órdenes listas (salieron de cocina) y no entregadas/canceladas
                                     const estadoLimpio = (o.estado || '').toLowerCase().trim();
                                     const estadoDomiLimpio = (o.estado_domicilio || '').toLowerCase().trim();
-
-                                    // Acepta órdenes listas/en camino/pendientes que aún no estén entregadas ni canceladas
+                                    const yaSalioDeCocina =
+                                      estadoLimpio === 'listo' || estadoLimpio === 'lista';
                                     const noEntregada =
                                       estadoDomiLimpio !== 'entregado' &&
-                                      estadoDomiLimpio !== 'cancelado' &&
-                                      estadoLimpio !== 'entregado' &&
-                                      estadoLimpio !== 'cancelado';
+                                      estadoDomiLimpio !== 'cancelado';
 
-                                    const estaDisponibleParaAsignar =
-                                    noEntregada &&
-                                    (estadoLimpio.includes('list') || estadoLimpio.includes('camino'));
-
-                                    const tieneDomiValido =
+                                    // 3. Sin domiciliario activo asignado (en cuanto se asigna, desaparece)
+                                    const domiIdNum = Number(o.domiciliario_id);
+                                    const tieneDomiActivo =
                                       o.domiciliario_id !== null &&
                                       o.domiciliario_id !== undefined &&
                                       String(o.domiciliario_id).trim() !== '' &&
-                                      String(o.domiciliario_id).toLowerCase() !== 'null' &&
-                                      Number(o.domiciliario_id) > 0 &&
-                                      domiciliarios.some(d => Number(d.id) === Number(o.domiciliario_id));
+                                      !Number.isNaN(domiIdNum) &&
+                                      domiIdNum > 0 &&
+                                      domiciliarios.some(
+                                        d =>
+                                          Number(d.id) === domiIdNum &&
+                                          (d.estado || '').toLowerCase() !== 'inhabilitado' &&
+                                          d.activo !== false
+                                      );
 
-                                    const sinAsignar = !tieneDomiValido;
+                                    const sinAsignar = !tieneDomiActivo;
 
                                     const termino = (busquedaOrdenDomi[domi.id] || '').toLowerCase().trim();
                                     const coincideBusq =
