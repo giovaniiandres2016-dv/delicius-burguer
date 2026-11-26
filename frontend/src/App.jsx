@@ -1,11 +1,11 @@
 // ============================================================================
-// ARCHIVO: src/App.jsx (Enrutador Seguro y Limpio para Vértizze)
+// ARCHIVO: src/App.jsx (Enrutador con sesiones independientes por módulo)
 // ============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
 
 // Vistas del Administrador y Personal (Privadas)
-import Login from './vistas/admin/Login';
+import Login, { CLAVES_MODULO } from './vistas/admin/Login';
 import DashboardGeneral from './vistas/admin/DashboardGeneral';
 
 // Vista de Cocina (KDS)
@@ -21,18 +21,28 @@ import PantallaCarrito from './vistas/cliente/PantallaCarrito';
 import PantallaCheckout from './vistas/cliente/PantallaCheckout';
 import PantallaExito from './vistas/cliente/PantallaExito';
 
-const limpiarStorageSesion = () => {
+const limpiarStorageModulo = (modulo) => {
+  const claves = CLAVES_MODULO[modulo];
+  if (claves) {
+    localStorage.removeItem(claves.sesion);
+    localStorage.removeItem(claves.rol);
+    localStorage.removeItem(claves.expira);
+  }
+  // Limpieza residual de claves anteriores si existieran
   localStorage.removeItem('vertizze_sesion');
   localStorage.removeItem('sesion_admin');
   localStorage.removeItem('rol_vertizze');
   localStorage.removeItem('vertizze_sesion_expira');
 };
 
-const leerSesionValida = () => {
+const leerSesionModulo = (modulo) => {
+  const claves = CLAVES_MODULO[modulo];
+  if (!claves) return null;
+
   try {
-    const rawSesion = localStorage.getItem('vertizze_sesion');
-    const rolGuardado = localStorage.getItem('rol_vertizze');
-    const expiraGuardado = Number(localStorage.getItem('vertizze_sesion_expira') || '0');
+    const rawSesion = localStorage.getItem(claves.sesion);
+    const rolGuardado = localStorage.getItem(claves.rol);
+    const expiraGuardado = Number(localStorage.getItem(claves.expira) || '0');
 
     if (!rawSesion && !rolGuardado) {
       return null;
@@ -42,7 +52,7 @@ const leerSesionValida = () => {
     const expiraEn = expiraGuardado || Number(sesionParseada?.expiraEn || 0);
 
     if (!expiraEn || Date.now() > expiraEn) {
-      limpiarStorageSesion();
+      limpiarStorageModulo(modulo);
       return null;
     }
 
@@ -50,13 +60,25 @@ const leerSesionValida = () => {
     const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
 
     if (!rolNormalizado) {
-      limpiarStorageSesion();
+      limpiarStorageModulo(modulo);
+      return null;
+    }
+
+    if (modulo === 'cocina' && rolNormalizado !== 'cocina') {
+      return null;
+    }
+
+    if (
+      modulo === 'admin' &&
+      rolNormalizado !== 'administrador' &&
+      rolNormalizado !== 'colaborador'
+    ) {
       return null;
     }
 
     return { sesion: sesionParseada, rol: rolNormalizado };
   } catch {
-    limpiarStorageSesion();
+    limpiarStorageModulo(modulo);
     return null;
   }
 };
@@ -69,28 +91,26 @@ export default function App() {
   const [carrito, setCarrito] = useState([]);
   const [datosUltimaOrden, setDatosUltimaOrden] = useState(null);
 
-  const [sesionActiva, setSesionActiva] = useState(false);
-  const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'colaborador'
+  const [sesionesPorModulo, setSesionesPorModulo] = useState({
+    admin: null,
+    cocina: null,
+  });
 
-  const sincronizarSesionDesdeStorage = useCallback(() => {
-    const sesionValida = leerSesionValida();
-    if (sesionValida) {
-      setSesionActiva(true);
-      setRolSesion(sesionValida.rol);
-    } else {
-      setSesionActiva(false);
-      setRolSesion(null);
-    }
+  const sincronizarSesiones = useCallback(() => {
+    setSesionesPorModulo({
+      admin: leerSesionModulo('admin'),
+      cocina: leerSesionModulo('cocina'),
+    });
   }, []);
 
   useEffect(() => {
     const actualizarRuta = () => {
       setRutaActual(window.location.pathname);
-      sincronizarSesionDesdeStorage();
+      sincronizarSesiones();
     };
 
     window.addEventListener('popstate', actualizarRuta);
-    window.addEventListener('storage', sincronizarSesionDesdeStorage);
+    window.addEventListener('storage', sincronizarSesiones);
 
     const originalPushState = window.history.pushState;
     window.history.pushState = function (...args) {
@@ -98,24 +118,26 @@ export default function App() {
       actualizarRuta();
     };
 
-    sincronizarSesionDesdeStorage();
+    sincronizarSesiones();
 
     return () => {
       window.removeEventListener('popstate', actualizarRuta);
-      window.removeEventListener('storage', sincronizarSesionDesdeStorage);
+      window.removeEventListener('storage', sincronizarSesiones);
       window.history.pushState = originalPushState;
     };
-  }, [sincronizarSesionDesdeStorage]);
+  }, [sincronizarSesiones]);
 
   const navegarA = (nuevaRuta) => {
     window.history.pushState({}, '', nuevaRuta);
     setRutaActual(nuevaRuta);
   };
 
-  const cerrarSesionGeneral = () => {
-    limpiarStorageSesion();
-    setSesionActiva(false);
-    setRolSesion(null);
+  const cerrarSesionModulo = (modulo) => {
+    limpiarStorageModulo(modulo);
+    setSesionesPorModulo((prev) => ({
+      ...prev,
+      [modulo]: null,
+    }));
     navegarA('/login');
   };
 
@@ -172,61 +194,92 @@ export default function App() {
     return <VistaDomiciliario />;
   }
 
-  if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
-    if (!sesionActiva || !rolSesion) {
+  // Ruta específica de Cocina (/cocina) con sesión independiente
+  if (ruta.includes('/cocina')) {
+    const sesionCocina = sesionesPorModulo.cocina || leerSesionModulo('cocina');
+    if (!sesionCocina) {
       return (
         <Login
-          alIniciarSesion={(rolAsignado = 'administrador') => {
-            const rolRaw = rolAsignado.toLowerCase().trim();
-            const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
-            localStorage.setItem('rol_vertizze', rolNormalizado);
-            setRolSesion(rolNormalizado);
-            setSesionActiva(true);
-
-            if (rolNormalizado === 'cocina') {
-              navegarA('/cocina');
-            } else if (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') {
-              navegarA('/admin');
-            }
+          moduloInicial="cocina_form"
+          alIniciarSesion={(rolAsignado = 'cocina') => {
+            const rolNormalizado = rolAsignado.toLowerCase().trim() === 'cocina' ? 'cocina' : 'cocina';
+            setSesionesPorModulo((prev) => ({
+              ...prev,
+              cocina: { sesion: { rol: rolNormalizado }, rol: rolNormalizado },
+            }));
+            navegarA('/cocina');
           }}
         />
       );
     }
 
-    if (rolSesion === 'cocina') {
-      return (
-        <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
-          <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
-            <span className="text-emerald-400 font-bold flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Modo Cocina (KDS) Activo
-            </span>
-            <button
-              type="button"
-              onClick={cerrarSesionGeneral}
-              className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
-            >
-              Cerrar Sesión
-            </button>
-          </div>
-          <PantallaCocina />
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col justify-between select-none">
+        <div className="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex justify-between items-center text-xs">
+          <span className="text-emerald-400 font-bold flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Modo Cocina (KDS) Activo — {sesionCocina.sesion?.usuario || sesionCocina.sesion?.nombre || 'Cocina'}
+          </span>
+          <button
+            type="button"
+            onClick={() => cerrarSesionModulo('cocina')}
+            className="text-red-400 hover:text-red-300 font-bold cursor-pointer"
+          >
+            Cerrar Sesión
+          </button>
         </div>
+        <PantallaCocina />
+      </div>
+    );
+  }
+
+  // Ruta específica de Administración (/admin) con sesión independiente
+  if (ruta.includes('/admin')) {
+    const sesionAdmin = sesionesPorModulo.admin || leerSesionModulo('admin');
+    if (!sesionAdmin) {
+      return (
+        <Login
+          moduloInicial="admin_form"
+          alIniciarSesion={(rolAsignado = 'administrador') => {
+            const rolRaw = rolAsignado.toLowerCase().trim();
+            const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
+            setSesionesPorModulo((prev) => ({
+              ...prev,
+              admin: { sesion: { rol: rolNormalizado }, rol: rolNormalizado },
+            }));
+            navegarA('/admin');
+          }}
+        />
       );
     }
 
-    if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
-      return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
-    }
+    return (
+      <DashboardGeneral
+        rolInicial={sesionAdmin.rol}
+        onCerrarSesion={() => cerrarSesionModulo('admin')}
+      />
+    );
+  }
 
+  // Selector general de acceso (/login)
+  if (ruta.includes('/login')) {
     return (
       <Login
-        alIniciarSesion={(rolAsignado = 'administrador') => {
+        moduloInicial="seleccion"
+        alIniciarSesion={(rolAsignado = 'administrador', moduloDestino = 'admin') => {
           const rolRaw = rolAsignado.toLowerCase().trim();
           const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
-          localStorage.setItem('rol_vertizze', rolNormalizado);
-          setRolSesion(rolNormalizado);
-          setSesionActiva(true);
-          navegarA(rolNormalizado === 'cocina' ? '/cocina' : '/admin');
+          const esCocina = moduloDestino === 'cocina' || rolNormalizado === 'cocina';
+
+          setSesionesPorModulo((prev) => ({
+            ...prev,
+            [esCocina ? 'cocina' : 'admin']: {
+              sesion: { rol: esCocina ? 'cocina' : rolNormalizado },
+              rol: esCocina ? 'cocina' : rolNormalizado,
+            },
+          }));
+
+          navegarA(esCocina ? '/cocina' : '/admin');
         }}
       />
     );
