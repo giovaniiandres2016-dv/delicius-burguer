@@ -1,32 +1,53 @@
 // ============================================================================
 // ARCHIVO: src/vistas/admin/Login.jsx
-// DESCRIPCIÓN: Pantalla de selección de rol y autenticación por usuario (Admin y Cocina).
+// DESCRIPCIÓN: Autenticación independiente por módulo (Admin y Cocina) con expiración.
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChefHat, ShieldCheck, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { supabase } from '../../sdk/supabaseClient';
 
-const DURACION_SESION_MS = 12 * 60 * 60 * 1000; // 12 horas
+const DURACION_SESION_MS = 12 * 60 * 60 * 1000; // 12 horas por sesión
 
-export default function Login({ alIniciarSesion }) {
-  const [modo, setModo] = useState('seleccion'); // 'seleccion', 'admin_form' o 'cocina_form'
+export const CLAVES_MODULO = {
+  cocina: {
+    sesion: 'vertizze_sesion_cocina',
+    rol: 'vertizze_rol_cocina',
+    expira: 'vertizze_expira_cocina',
+  },
+  admin: {
+    sesion: 'vertizze_sesion_admin',
+    rol: 'vertizze_rol_admin',
+    expira: 'vertizze_expira_admin',
+  },
+};
+
+export default function Login({ alIniciarSesion, moduloInicial = 'seleccion' }) {
+  const [modo, setModo] = useState(moduloInicial); // 'seleccion', 'admin_form' o 'cocina_form'
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
-  const guardarSesion = (dataUsuario, rolEfectivo) => {
+  useEffect(() => {
+    setModo(moduloInicial);
+    setError('');
+  }, [moduloInicial]);
+
+  const guardarSesionModulo = (moduloDestino, dataUsuario, rolEfectivo) => {
+    const claves = CLAVES_MODULO[moduloDestino] || CLAVES_MODULO.admin;
     const expiraEn = Date.now() + DURACION_SESION_MS;
+
     const payloadSesion = {
       ...dataUsuario,
       rol: rolEfectivo,
+      modulo: moduloDestino,
       expiraEn,
     };
 
-    localStorage.setItem('vertizze_sesion', JSON.stringify(payloadSesion));
-    localStorage.setItem('rol_vertizze', rolEfectivo);
-    localStorage.setItem('vertizze_sesion_expira', String(expiraEn));
+    localStorage.setItem(claves.sesion, JSON.stringify(payloadSesion));
+    localStorage.setItem(claves.rol, rolEfectivo);
+    localStorage.setItem(claves.expira, String(expiraEn));
   };
 
   const manejarLoginAdmin = async (e) => {
@@ -53,8 +74,8 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Este usuario no tiene permisos para acceder al Panel Administrativo.');
       }
 
-      guardarSesion(data, rolNormalizado);
-      alIniciarSesion(rolNormalizado);
+      guardarSesionModulo('admin', data, rolNormalizado);
+      alIniciarSesion(rolNormalizado, 'admin');
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
     } finally {
@@ -89,10 +110,9 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
       }
 
-      // Al ingresar por el formulario de Cocina (KDS), la sesión activa entra en modo 'cocina'
       const rolEfectivo = 'cocina';
-      guardarSesion(data, rolEfectivo);
-      alIniciarSesion(rolEfectivo);
+      guardarSesionModulo('cocina', data, rolEfectivo);
+      alIniciarSesion(rolEfectivo, 'cocina');
     } catch (err) {
       setError(err.message || 'Error al autenticar en cocina');
     } finally {
