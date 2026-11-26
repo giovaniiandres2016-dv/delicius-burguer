@@ -2,7 +2,7 @@
 // ARCHIVO: src/App.jsx (Enrutador Seguro y Limpio para Vértizze)
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 // Vistas del Administrador y Personal (Privadas)
 import Login from './vistas/admin/Login';
@@ -21,6 +21,46 @@ import PantallaCarrito from './vistas/cliente/PantallaCarrito';
 import PantallaCheckout from './vistas/cliente/PantallaCheckout';
 import PantallaExito from './vistas/cliente/PantallaExito';
 
+const limpiarStorageSesion = () => {
+  localStorage.removeItem('vertizze_sesion');
+  localStorage.removeItem('sesion_admin');
+  localStorage.removeItem('rol_vertizze');
+  localStorage.removeItem('vertizze_sesion_expira');
+};
+
+const leerSesionValida = () => {
+  try {
+    const rawSesion = localStorage.getItem('vertizze_sesion');
+    const rolGuardado = localStorage.getItem('rol_vertizze');
+    const expiraGuardado = Number(localStorage.getItem('vertizze_sesion_expira') || '0');
+
+    if (!rawSesion && !rolGuardado) {
+      return null;
+    }
+
+    const sesionParseada = rawSesion ? JSON.parse(rawSesion) : null;
+    const expiraEn = expiraGuardado || Number(sesionParseada?.expiraEn || 0);
+
+    if (!expiraEn || Date.now() > expiraEn) {
+      limpiarStorageSesion();
+      return null;
+    }
+
+    const rolRaw = (rolGuardado || sesionParseada?.rol || '').toLowerCase().trim();
+    const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
+
+    if (!rolNormalizado) {
+      limpiarStorageSesion();
+      return null;
+    }
+
+    return { sesion: sesionParseada, rol: rolNormalizado };
+  } catch {
+    limpiarStorageSesion();
+    return null;
+  }
+};
+
 export default function App() {
   const [rutaActual, setRutaActual] = useState(window.location.pathname);
 
@@ -32,10 +72,25 @@ export default function App() {
   const [sesionActiva, setSesionActiva] = useState(false);
   const [rolSesion, setRolSesion] = useState(null); // 'administrador', 'cocina', 'colaborador'
 
+  const sincronizarSesionDesdeStorage = useCallback(() => {
+    const sesionValida = leerSesionValida();
+    if (sesionValida) {
+      setSesionActiva(true);
+      setRolSesion(sesionValida.rol);
+    } else {
+      setSesionActiva(false);
+      setRolSesion(null);
+    }
+  }, []);
+
   useEffect(() => {
-    const actualizarRuta = () => setRutaActual(window.location.pathname);
+    const actualizarRuta = () => {
+      setRutaActual(window.location.pathname);
+      sincronizarSesionDesdeStorage();
+    };
 
     window.addEventListener('popstate', actualizarRuta);
+    window.addEventListener('storage', sincronizarSesionDesdeStorage);
 
     const originalPushState = window.history.pushState;
     window.history.pushState = function (...args) {
@@ -43,20 +98,14 @@ export default function App() {
       actualizarRuta();
     };
 
-    // Verificación de sesión al cargar desde localStorage
-    const sesionGuardada = JSON.parse(localStorage.getItem('vertizze_sesion') || 'null');
-    const rolGuardado = localStorage.getItem('rol_vertizze') || sesionGuardada?.rol;
-
-    if (sesionGuardada || rolGuardado) {
-      setSesionActiva(true);
-      setRolSesion((rolGuardado || 'administrador').toLowerCase().trim());
-    }
+    sincronizarSesionDesdeStorage();
 
     return () => {
       window.removeEventListener('popstate', actualizarRuta);
+      window.removeEventListener('storage', sincronizarSesionDesdeStorage);
       window.history.pushState = originalPushState;
     };
-  }, []);
+  }, [sincronizarSesionDesdeStorage]);
 
   const navegarA = (nuevaRuta) => {
     window.history.pushState({}, '', nuevaRuta);
@@ -64,9 +113,7 @@ export default function App() {
   };
 
   const cerrarSesionGeneral = () => {
-    localStorage.removeItem('vertizze_sesion');
-    localStorage.removeItem('sesion_admin');
-    localStorage.removeItem('rol_vertizze');
+    limpiarStorageSesion();
     setSesionActiva(false);
     setRolSesion(null);
     navegarA('/login');
@@ -121,26 +168,24 @@ export default function App() {
   const ruta = (rutaActual || window.location.pathname).toLowerCase();
 
   // Vista independiente de Domiciliarios (/domiciliario)
-  // Cada repartidor entra con su PIN y gestiona su propia sesión sin afectar la sesión general
   if (ruta.includes('/domiciliario')) {
     return <VistaDomiciliario />;
   }
 
   if (ruta.includes('/admin') || ruta.includes('/cocina') || ruta.includes('/login')) {
-    if (!sesionActiva) {
+    if (!sesionActiva || !rolSesion) {
       return (
         <Login
           alIniciarSesion={(rolAsignado = 'administrador') => {
-            const rolNormalizado = rolAsignado.toLowerCase().trim();
+            const rolRaw = rolAsignado.toLowerCase().trim();
+            const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
             localStorage.setItem('rol_vertizze', rolNormalizado);
             setRolSesion(rolNormalizado);
             setSesionActiva(true);
-            if (rolNormalizado === 'cocina' && !ruta.includes('/cocina')) {
+
+            if (rolNormalizado === 'cocina') {
               navegarA('/cocina');
-            } else if (
-              (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') &&
-              !ruta.includes('/admin')
-            ) {
+            } else if (rolNormalizado === 'administrador' || rolNormalizado === 'colaborador') {
               navegarA('/admin');
             }
           }}
@@ -172,6 +217,19 @@ export default function App() {
     if (rolSesion === 'administrador' || rolSesion === 'colaborador') {
       return <DashboardGeneral rolInicial={rolSesion} onCerrarSesion={cerrarSesionGeneral} />;
     }
+
+    return (
+      <Login
+        alIniciarSesion={(rolAsignado = 'administrador') => {
+          const rolRaw = rolAsignado.toLowerCase().trim();
+          const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
+          localStorage.setItem('rol_vertizze', rolNormalizado);
+          setRolSesion(rolNormalizado);
+          setSesionActiva(true);
+          navegarA(rolNormalizado === 'cocina' ? '/cocina' : '/admin');
+        }}
+      />
+    );
   }
 
   // ==========================================================================
