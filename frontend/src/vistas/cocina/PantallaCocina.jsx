@@ -4,11 +4,25 @@
 // ============================================================================
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Clock, ChefHat, Bell, UtensilsCrossed, Bike, Store, Printer, Sparkles } from 'lucide-react';
+import { Clock, ChefHat, Bell, UtensilsCrossed, Bike, Store, Printer, Sparkles, X } from 'lucide-react';
 import { supabase } from '../../sdk/supabaseClient';
 import { asignarDomiciliarioAlCompletarCocina } from '../../sdk/vertizzeApi';
 
 const ESTADOS_ACTIVOS_COCINA = new Set(['pendiente', 'en_proceso', 'en proceso']);
+const ESTADOS_CANCELADOS = new Set(['cancelado', 'cancelada', 'anulado', 'anulada']);
+const DURACION_CANCELADA_MS = 15000;
+
+function esEstadoCancelado(estado) {
+  return ESTADOS_CANCELADOS.has(String(estado || '').toLowerCase().trim());
+}
+
+function esOrdenCancelada(orden) {
+  return (
+    esEstadoCancelado(orden?.estado) ||
+    esEstadoCancelado(orden?.estado_domicilio) ||
+    esEstadoCancelado(orden?.estado_pedido)
+  );
+}
 
 function parsearItemsSeguros(itemsRaw) {
   if (!itemsRaw) return [];
@@ -81,7 +95,9 @@ function detectarCambiosEnOrden(ordenAnterior, ordenNueva) {
     'numero_mesa',
     'mesa_id',
     'direccion',
-    'ubicacion_detalle'
+    'ubicacion_detalle',
+    'observaciones',
+    'nota'
   ];
 
   const huboCambioEnCabecera = camposRelevantes.some(
@@ -97,6 +113,7 @@ function detectarCambiosEnOrden(ordenAnterior, ordenNueva) {
 
 export default function PantallaCocina() {
   const [ordenes, setOrdenes] = useState([]);
+  const [ordenesCanceladasVisibles, setOrdenesCanceladasVisibles] = useState([]);
   const [coberturaZonas, setCoberturaZonas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [ordenModificadaInfo, setOrdenModificadaInfo] = useState({});
@@ -104,6 +121,7 @@ export default function PantallaCocina() {
   const [audioHabilitado, setAudioHabilitado] = useState(false);
 
   const ordenesPreviasRef = useRef(new Map());
+  const canceladasTimersRef = useRef(new Map());
   const inicializadoRef = useRef(false);
   const audioCtxRef = useRef(null);
 
@@ -142,6 +160,8 @@ export default function PantallaCocina() {
     return () => {
       window.removeEventListener('pointerdown', manejarInteraccionUsuario);
       window.removeEventListener('keydown', manejarInteraccionUsuario);
+      canceladasTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      canceladasTimersRef.current.clear();
     };
   }, []);
 
@@ -151,6 +171,27 @@ export default function PantallaCocina() {
       if (!audioCtx) return;
 
       const ahora = audioCtx.currentTime;
+
+      if (tipo === 'cancelada') {
+        [0, 0.24].forEach((offset) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(340, ahora + offset);
+          osc.frequency.exponentialRampToValueAtTime(185, ahora + offset + 0.18);
+
+          gain.gain.setValueAtTime(0.001, ahora + offset);
+          gain.gain.linearRampToValueAtTime(0.28, ahora + offset + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, ahora + offset + 0.2);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(ahora + offset);
+          osc.stop(ahora + offset + 0.21);
+        });
+        return;
+      }
 
       if (tipo === 'modificada') {
         [0, 0.18].forEach((offset) => {
@@ -192,6 +233,29 @@ export default function PantallaCocina() {
     } catch (e) {
       console.log('Error reproduciendo alerta sonora:', e);
     }
+  };
+
+  const programarRetiroOrdenCancelada = (ordenCancelada) => {
+    if (!ordenCancelada?.id) return;
+
+    const timerExistente = canceladasTimersRef.current.get(ordenCancelada.id);
+    if (timerExistente) {
+      clearTimeout(timerExistente);
+    }
+
+    const venceEn = Date.now() + DURACION_CANCELADA_MS;
+
+    setOrdenesCanceladasVisibles((prev) => {
+      const sinDuplicado = prev.filter((item) => item.id !== ordenCancelada.id);
+      return [...sinDuplicado, { ...ordenCancelada, estado: 'cancelado', venceEn }];
+    });
+
+    const timeoutId = setTimeout(() => {
+      canceladasTimersRef.current.delete(ordenCancelada.id);
+      setOrdenesCanceladasVisibles((prev) => prev.filter((item) => item.id !== ordenCancelada.id));
+    }, DURACION_CANCELADA_MS);
+
+    canceladasTimersRef.current.set(ordenCancelada.id, timeoutId);
   };
 
   const calcularCostoDomicilio = (orden) => {
@@ -283,7 +347,7 @@ export default function PantallaCocina() {
 
       if (error) throw error;
 
-      const nuevasOrdenes = data || [];
+      const nuevasOrdenes = (data || []).filter((o) => !esOrdenCancelada(o));
       sincronizarMapaOrdenes(nuevasOrdenes, alertarEnCambios);
       setOrdenes(nuevasOrdenes);
     } catch (error) {
@@ -303,14 +367,30 @@ export default function PantallaCocina() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes' },
         async (payload) => {
-          if (payload.eventType === 'INSERT') {
-            await reproducirAlertaSonora('nueva');
+          if (payload.eventType === 'INSERT' && payload.new) {
+            if (!esOrdenCancelada(payload.new)) {
+              await reproducirAlertaSonora('nueva');
+            }
           } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const ordenPrevia = ordenesPreviasRef.current.get(payload.new.id);
+
+            if (esOrdenCancelada(payload.new)) {
+              ordenesPreviasRef.current.delete(payload.new.id);
+              setOrdenModificadaInfo((prev) => {
+                const copia = { ...prev };
+                delete copia[payload.new.id];
+                return copia;
+              });
+              setOrdenes((prev) => prev.filter((o) => o.id !== payload.new.id));
+              programarRetiroOrdenCancelada(payload.new);
+              await reproducirAlertaSonora('cancelada');
+              return;
+            }
+
             const estadoNuevo = String(payload.new.estado || '').toLowerCase().trim();
             if (ESTADOS_ACTIVOS_COCINA.has(estadoNuevo)) {
-              const anterior = ordenesPreviasRef.current.get(payload.new.id);
-              if (anterior) {
-                const diff = detectarCambiosEnOrden(anterior, payload.new);
+              if (ordenPrevia) {
+                const diff = detectarCambiosEnOrden(ordenPrevia, payload.new);
                 if (diff.modificada) {
                   setOrdenModificadaInfo((prev) => ({
                     ...prev,
@@ -342,6 +422,8 @@ export default function PantallaCocina() {
   };
 
   const manejarAccionTarjeta = async (orden) => {
+    if (esOrdenCancelada(orden)) return;
+
     await desbloquearAudioContext();
     limpiarResaltadoOrden(orden.id);
 
@@ -403,6 +485,24 @@ export default function PantallaCocina() {
     }, 200);
   };
 
+  const ContadorRetiroCancelada = ({ venceEn }) => {
+    const [segundosRestantes, setSegundosRestantes] = useState(
+      Math.max(1, Math.ceil((venceEn - Date.now()) / 1000))
+    );
+
+    useEffect(() => {
+      const actualizar = () => {
+        const rest = Math.max(0, Math.ceil((venceEn - Date.now()) / 1000));
+        setSegundosRestantes(rest);
+      };
+      actualizar();
+      const intervalo = setInterval(actualizar, 250);
+      return () => clearInterval(intervalo);
+    }, [venceEn]);
+
+    return <span>Sale en {segundosRestantes}s</span>;
+  };
+
   const CronometroActivo = ({ tiempoInicio }) => {
     const [segundosTranscurridos, setSegundosTranscurridos] = useState(0);
 
@@ -432,18 +532,18 @@ export default function PantallaCocina() {
     );
   };
 
-  const renderizarArticulos = (itemsRaw, cambiosPorIndice = {}) => {
+  const renderizarArticulos = (itemsRaw, cambiosPorIndice = {}, tachado = false) => {
     if (!itemsRaw) return <span className="text-white/60 text-xs">Sin descripción de productos</span>;
 
     if (typeof itemsRaw === 'string') {
       try {
         const parsed = JSON.parse(itemsRaw);
         if (!Array.isArray(parsed)) {
-          return <p className="text-xs font-semibold text-amber-100">{itemsRaw}</p>;
+          return <p className={`text-xs font-semibold text-amber-100 ${tachado ? 'line-through opacity-75' : ''}`}>{itemsRaw}</p>;
         }
         itemsRaw = parsed;
       } catch {
-        return <p className="text-xs font-semibold text-amber-100">{itemsRaw}</p>;
+        return <p className={`text-xs font-semibold text-amber-100 ${tachado ? 'line-through opacity-75' : ''}`}>{itemsRaw}</p>;
       }
     }
 
@@ -455,7 +555,7 @@ export default function PantallaCocina() {
             const nombre = item?.nombre || item?.titulo || item?.producto || 'Artículo';
             const observacion = item?.observacion || item?.nota || '';
             const cambio = cambiosPorIndice[index];
-            const itemResaltado = Boolean(cambio);
+            const itemResaltado = !tachado && Boolean(cambio);
 
             return (
               <div
@@ -466,7 +566,7 @@ export default function PantallaCocina() {
                     : ''
                 }`}
               >
-                <div className="flex items-center justify-between gap-1.5 text-xs font-extrabold text-white leading-snug">
+                <div className={`flex items-center justify-between gap-1.5 text-xs font-extrabold text-white leading-snug ${tachado ? 'line-through opacity-75' : ''}`}>
                   <span className={itemResaltado ? 'text-fuchsia-200' : 'text-white'}>
                     <span className={cambio?.cantidadCambio || cambio?.esNuevo ? 'text-amber-300 underline decoration-amber-400' : ''}>
                       {cantidad}x
@@ -487,7 +587,9 @@ export default function PantallaCocina() {
                 {observacion && (
                   <p
                     className={`text-[11px] font-bold italic mt-0.5 px-1.5 py-0.5 rounded inline-block ${
-                      cambio?.notaCambio
+                      tachado
+                        ? 'text-red-200/80 bg-black/40 line-through'
+                        : cambio?.notaCambio
                         ? 'bg-amber-400 text-neutral-950 not-italic font-black'
                         : 'text-amber-300 bg-black/35'
                     }`}
@@ -517,6 +619,11 @@ export default function PantallaCocina() {
   const costoDomicilioImpresion = ordenImprimiendo ? calcularCostoDomicilio(ordenImprimiendo) : 0;
   const subtotalImpresion = ordenImprimiendo ? Number(ordenImprimiendo.subtotal || ordenImprimiendo.total || 0) : 0;
   const totalImpresion = subtotalImpresion + (esDomicilioImpresion ? costoDomicilioImpresion : 0);
+
+  const tarjetasCombinadas = [
+    ...ordenes.map((o) => ({ orden: o, esCanceladaVisual: false })),
+    ...ordenesCanceladasVisibles.map((o) => ({ orden: o, esCanceladaVisual: true }))
+  ];
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-2.5 sm:p-4 select-none flex flex-col justify-between">
@@ -644,7 +751,7 @@ export default function PantallaCocina() {
                 DELICIUS <span className="text-amber-500">BURGUES</span> - COCINA (KDS)
               </h1>
               <p className="text-[11px] text-neutral-400">
-                Toca la tarjeta para avanzar el estado • Órdenes modificadas resaltan en violeta.
+                Toca la tarjeta para avanzar • Cambios resaltan en violeta • Canceladas muestran X roja por 15s.
               </p>
             </div>
           </div>
@@ -660,6 +767,26 @@ export default function PantallaCocina() {
               <span>{audioHabilitado ? 'Probar Sonido' : 'Activar / Probar Sonido'}</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => reproducirAlertaSonora('modificada')}
+              title="Probar sonido de cambio"
+              className="bg-neutral-900 hover:bg-neutral-800 border border-fuchsia-500/30 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-fuchsia-300 flex items-center gap-1 cursor-pointer transition-all touch-manipulation"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Sonido Cambio</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => reproducirAlertaSonora('cancelada')}
+              title="Probar sonido de cancelación"
+              className="bg-neutral-900 hover:bg-neutral-800 border border-red-500/30 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-red-400 flex items-center gap-1 cursor-pointer transition-all touch-manipulation"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Sonido Cancelada</span>
+            </button>
+
             <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold text-amber-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Sistema en Línea</span>
@@ -667,11 +794,11 @@ export default function PantallaCocina() {
           </div>
         </div>
 
-        {cargando && ordenes.length === 0 ? (
+        {cargando && tarjetasCombinadas.length === 0 ? (
           <div className="text-center py-16 text-neutral-500 text-xs">
             Sincronizando órdenes con la base de datos...
           </div>
-        ) : ordenes.length === 0 ? (
+        ) : tarjetasCombinadas.length === 0 ? (
           <div className="text-center py-16 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2">
             <ChefHat className="w-10 h-10 text-neutral-700 mx-auto" />
             <p className="text-xs font-bold text-neutral-400">No hay pedidos pendientes en la cola</p>
@@ -679,45 +806,78 @@ export default function PantallaCocina() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 pb-6">
-            {ordenes.map((orden) => {
+            {tarjetasCombinadas.map(({ orden, esCanceladaVisual }) => {
               const estadoActual = (orden.estado || 'pendiente').toLowerCase().trim();
               const numeroMesa = orden.mesa || orden.numero_mesa || orden.mesa_id;
               const tipoServicioRaw = (orden.tipo_servicio || '').toLowerCase();
               const esDomicilio = tipoServicioRaw.includes('domicilio') || tipoServicioRaw.includes('delivery');
               const infoCambio = ordenModificadaInfo[orden.id];
-              const estaModificada = Boolean(infoCambio?.modificada);
+              const estaModificada = !esCanceladaVisual && Boolean(infoCambio?.modificada);
 
-              let estilosTarjeta = 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-neutral-600';
+              let estilosTarjeta = 'border-neutral-800 bg-neutral-900 text-neutral-100 hover:border-neutral-600 cursor-pointer';
               let franjaColor = 'bg-neutral-700';
               let textoBotonAccion = 'Iniciar Preparación';
               let estiloBotonAccion = 'bg-neutral-800 hover:bg-neutral-700 text-white border border-white/15';
 
               if (estadoActual === 'en_proceso' || estadoActual === 'en proceso') {
-                estilosTarjeta = 'border-amber-500 bg-amber-950/90 text-amber-50 hover:border-amber-400';
+                estilosTarjeta = 'border-amber-500 bg-amber-950/90 text-amber-50 hover:border-amber-400 cursor-pointer';
                 franjaColor = 'bg-amber-400';
                 textoBotonAccion = 'Marcar como Listo';
                 estiloBotonAccion = 'bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black';
               }
 
               if (estaModificada) {
-                estilosTarjeta = 'border-fuchsia-400 bg-fuchsia-950/85 text-fuchsia-50 ring-2 ring-fuchsia-400/50 hover:border-fuchsia-300';
+                estilosTarjeta = 'border-fuchsia-400 bg-fuchsia-950/85 text-fuchsia-50 ring-2 ring-fuchsia-400/50 hover:border-fuchsia-300 cursor-pointer';
                 franjaColor = 'bg-fuchsia-400';
+              }
+
+              if (esCanceladaVisual) {
+                estilosTarjeta = 'border-red-500 bg-red-950/90 text-red-100 ring-2 ring-red-500/60 cursor-not-allowed';
+                franjaColor = 'bg-red-500';
+                textoBotonAccion = 'Orden Cancelada';
+                estiloBotonAccion = 'bg-red-600/80 text-white font-black border border-red-400/50';
               }
 
               return (
                 <div
-                  key={orden.id}
-                  onClick={() => manejarAccionTarjeta(orden)}
-                  className={`border-2 rounded-xl p-2.5 flex flex-col justify-between transition-all relative overflow-hidden cursor-pointer active:scale-[0.99] touch-manipulation ${estilosTarjeta}`}
+                  key={`${orden.id}-${esCanceladaVisual ? 'cancelada' : 'activa'}`}
+                  onClick={() => {
+                    if (!esCanceladaVisual) {
+                      manejarAccionTarjeta(orden);
+                    }
+                  }}
+                  className={`border-2 rounded-xl p-2.5 flex flex-col justify-between transition-all relative overflow-hidden active:scale-[0.99] touch-manipulation ${estilosTarjeta}`}
                 >
                   <div className={`absolute top-0 inset-x-0 h-1 ${franjaColor}`}></div>
 
-                  <div className="space-y-2 pt-0.5">
+                  {esCanceladaVisual && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-red-950/55 backdrop-blur-[1px]">
+                      <div className="w-24 h-24 rounded-full bg-red-600/30 border-4 border-red-400 flex items-center justify-center shadow-2xl">
+                        <X className="w-16 h-16 text-red-300 stroke-[4]" />
+                      </div>
+                      <span className="mt-2 px-3 py-1 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-widest shadow-lg">
+                        Cancelado
+                      </span>
+                      {orden.venceEn && (
+                        <span className="mt-1 px-2 py-0.5 rounded bg-black/75 text-red-200 text-[10px] font-mono font-bold">
+                          <ContadorRetiroCancelada venceEn={orden.venceEn} />
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 pt-0.5 relative z-10">
                     <div className="flex items-center justify-between gap-1 flex-wrap">
                       <div className="flex items-center gap-1 flex-wrap">
                         <span className="text-[11px] font-black bg-black/50 px-2 py-0.5 rounded-md border border-white/10 text-amber-300">
                           #{orden.numero_orden || orden.id}
                         </span>
+
+                        {esCanceladaVisual && (
+                          <span className="text-[9px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-md uppercase">
+                            Cancelada
+                          </span>
+                        )}
 
                         {estaModificada && (
                           <span className="text-[9px] font-black bg-fuchsia-400 text-neutral-950 px-1.5 py-0.5 rounded-md uppercase flex items-center gap-0.5">
@@ -728,7 +888,7 @@ export default function PantallaCocina() {
                       </div>
 
                       <div className="flex items-center gap-1 flex-wrap">
-                        {(estadoActual === 'en_proceso' || estadoActual === 'en proceso') && orden.tiempo_inicio && (
+                        {!esCanceladaVisual && (estadoActual === 'en_proceso' || estadoActual === 'en proceso') && orden.tiempo_inicio && (
                           <CronometroActivo tiempoInicio={orden.tiempo_inicio} />
                         )}
 
@@ -768,7 +928,7 @@ export default function PantallaCocina() {
                     </div>
 
                     <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="text-sm font-black tracking-tight text-white truncate">
+                      <h3 className={`text-sm font-black tracking-tight text-white truncate ${esCanceladaVisual ? 'line-through opacity-75' : ''}`}>
                         {orden.cliente_nombre || 'Cliente'}
                       </h3>
                       <span className="text-[10px] text-white/75 font-semibold capitalize shrink-0">
@@ -780,11 +940,11 @@ export default function PantallaCocina() {
                       <span className="text-[9px] font-extrabold text-white/65 uppercase tracking-wider block">
                         Artículos:
                       </span>
-                      {renderizarArticulos(orden.items, infoCambio?.cambiosPorIndice || {})}
+                      {renderizarArticulos(orden.items, infoCambio?.cambiosPorIndice || {}, esCanceladaVisual)}
                     </div>
                   </div>
 
-                  <div className="mt-2.5 pt-2 border-t border-white/15">
+                  <div className="mt-2.5 pt-2 border-t border-white/15 relative z-10">
                     <div
                       className={`w-full py-2 rounded-lg text-[11px] uppercase tracking-wider transition-all flex items-center justify-center ${estiloBotonAccion}`}
                     >
