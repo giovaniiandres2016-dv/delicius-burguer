@@ -195,6 +195,15 @@ export default function App() {
   const ruta = (rutaActual || window.location.pathname).toLowerCase();
   const hash = (hashActual || window.location.hash || '').toLowerCase();
 
+  if (ruta.includes('/domi') || ruta.includes('/domiciliario')) {
+  return (
+    <div className="min-h-screen bg-red-950 text-white p-6 font-mono">
+      <p>SI ENTRO A ESTA RUTA: {ruta}</p>
+      <VistaDomiciliario />
+    </div>
+  );
+}
+
   // Vista independiente de Domiciliarios (/domi y /domiciliario)
   if (
     ruta.includes('/domi') ||
