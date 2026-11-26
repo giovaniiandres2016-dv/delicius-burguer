@@ -2572,6 +2572,7 @@ const eliminarZonaCobertura = async (id) => {
                                 {ordenes
                                   .filter(o => {
                                     const esDomi = (o.tipo_servicio || '').toLowerCase().includes('domicilio');
+                                    const estaLista = (o.estado || '').toLowerCase().trim() === 'listo';
                                     const sinAsignar = !o.domiciliario_id;
                                     const noEntregada =
                                       (o.estado_domicilio || '').toLowerCase() !== 'entregado' &&
@@ -2579,7 +2580,7 @@ const eliminarZonaCobertura = async (id) => {
                                     const coincideBusq = String(o.numero_orden || o.id)
                                       .toLowerCase()
                                       .includes((busquedaOrdenDomi[domi.id] || '').toLowerCase());
-                                    return esDomi && sinAsignar && noEntregada && coincideBusq;
+                                    return esDomi && estaLista && sinAsignar && noEntregada && coincideBusq;
                                   })
                                   .slice(0, 4)
                                   .map(ord => {
