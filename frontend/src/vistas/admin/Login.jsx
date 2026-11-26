@@ -7,12 +7,27 @@ import React, { useState } from 'react';
 import { ChefHat, ShieldCheck, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { supabase } from '../../sdk/supabaseClient';
 
+const DURACION_SESION_MS = 12 * 60 * 60 * 1000; // 12 horas
+
 export default function Login({ alIniciarSesion }) {
   const [modo, setModo] = useState('seleccion'); // 'seleccion', 'admin_form' o 'cocina_form'
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+
+  const guardarSesion = (dataUsuario, rolEfectivo) => {
+    const expiraEn = Date.now() + DURACION_SESION_MS;
+    const payloadSesion = {
+      ...dataUsuario,
+      rol: rolEfectivo,
+      expiraEn,
+    };
+
+    localStorage.setItem('vertizze_sesion', JSON.stringify(payloadSesion));
+    localStorage.setItem('rol_vertizze', rolEfectivo);
+    localStorage.setItem('vertizze_sesion_expira', String(expiraEn));
+  };
 
   const manejarLoginAdmin = async (e) => {
     e.preventDefault();
@@ -31,9 +46,14 @@ export default function Login({ alIniciarSesion }) {
         throw new Error('Usuario o contraseña incorrectos.');
       }
 
-      const rolNormalizado = (data.rol || 'administrador').toLowerCase().trim();
-      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolNormalizado }));
-      localStorage.setItem('rol_vertizze', rolNormalizado);
+      const rolRaw = (data.rol || 'administrador').toLowerCase().trim();
+      const rolNormalizado = rolRaw === 'admin' ? 'administrador' : rolRaw;
+
+      if (rolNormalizado !== 'administrador' && rolNormalizado !== 'colaborador') {
+        throw new Error('Este usuario no tiene permisos para acceder al Panel Administrativo.');
+      }
+
+      guardarSesion(data, rolNormalizado);
       alIniciarSesion(rolNormalizado);
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
@@ -60,15 +80,19 @@ export default function Login({ alIniciarSesion }) {
       }
 
       const rolUsuario = (data.rol || '').toLowerCase().trim();
-      if (rolUsuario !== 'cocina' && rolUsuario !== 'administrador') {
+      const esPermitido =
+        rolUsuario === 'cocina' ||
+        rolUsuario === 'administrador' ||
+        rolUsuario === 'admin';
+
+      if (!esPermitido) {
         throw new Error('Este usuario no tiene permisos autorizados para el Módulo de Cocina.');
       }
 
-      const rolFinal = rolUsuario === 'cocina' ? 'cocina' : rolUsuario;
-      localStorage.setItem('vertizze_sesion', JSON.stringify({ ...data, rol: rolFinal }));
-      localStorage.setItem('rol_vertizze', rolFinal);
-
-      alIniciarSesion(rolFinal);
+      // Al ingresar por el formulario de Cocina (KDS), la sesión activa entra en modo 'cocina'
+      const rolEfectivo = 'cocina';
+      guardarSesion(data, rolEfectivo);
+      alIniciarSesion(rolEfectivo);
     } catch (err) {
       setError(err.message || 'Error al autenticar en cocina');
     } finally {
