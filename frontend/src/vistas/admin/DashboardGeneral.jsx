@@ -2568,24 +2568,24 @@ const eliminarZonaCobertura = async (id) => {
                                 onChange={(e) => setBusquedaOrdenDomi(prev => ({ ...prev, [domi.id]: e.target.value }))}
                                 className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 py-0.5 text-[10px] text-white focus:outline-none focus:border-amber-500 font-bold"
                               />
-                              <div className="max-h-28 overflow-y-auto space-y-0.5">
+                             <div className="max-h-28 overflow-y-auto space-y-0.5">
                                 {ordenes
                                   .filter(o => {
                                     const esDomi = (o.tipo_servicio || '').toLowerCase().trim().includes('domicilio');
                                     const estadoLimpio = (o.estado || '').toLowerCase().trim();
                                     const estaLista = estadoLimpio === 'listo' || estadoLimpio === 'lista';
-                                    const sinAsignar = !o.domiciliario_id || o.domiciliario_id === 0 || String(o.domiciliario_id).trim() === '' || String(o.domiciliario_id).toLowerCase() === 'null';
                                     const noEntregada =
                                       (o.estado_domicilio || '').toLowerCase().trim() !== 'entregado' &&
                                       estadoLimpio !== 'entregado' &&
                                       estadoLimpio !== 'cancelado';
+                                    const noEsDeEsteMismoDomi = Number(o.domiciliario_id) !== Number(domi.id);
                                     const termino = (busquedaOrdenDomi[domi.id] || '').toLowerCase().trim();
                                     const coincideBusq =
                                       !termino ||
                                       String(o.numero_orden || '').toLowerCase().includes(termino) ||
                                       String(o.id || '').toLowerCase().includes(termino) ||
                                       (o.cliente_nombre || '').toLowerCase().includes(termino);
-                                    return esDomi && estaLista && sinAsignar && noEntregada && coincideBusq;
+                                    return esDomi && estaLista && noEntregada && noEsDeEsteMismoDomi && coincideBusq;
                                   })
                                   .sort((a, b) => Number(b.id) - Number(a.id))
                                   .map(ord => {
