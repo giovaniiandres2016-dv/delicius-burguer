@@ -2650,7 +2650,7 @@ const eliminarZonaCobertura = async (id) => {
                                       String(o.id || '').toLowerCase().includes(termino) ||
                                       (o.cliente_nombre || '').toLowerCase().includes(termino);
 
-                                    return esDomi && estaDisponibleParaAsignar && sinAsignar && coincideBusq;
+                                    return esDomi && yaSalioDeCocina && noEntregada && sinAsignar && coincideBusq;
                                   })
                                   .sort((a, b) => Number(b.id) - Number(a.id))
                                   .map(ord => {
