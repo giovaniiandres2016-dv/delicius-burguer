@@ -2617,31 +2617,21 @@ const eliminarZonaCobertura = async (id) => {
                                     ).toLowerCase().trim();
                                     const esDomi = servicioTexto.includes('domicilio');
 
-                                    // 2. Solo órdenes listas (salieron de cocina) y no entregadas/canceladas
+                                    // 2. Solo órdenes en estado Listo (que no estén entregadas ni canceladas)
                                     const estadoLimpio = (o.estado || '').toLowerCase().trim();
                                     const estadoDomiLimpio = (o.estado_domicilio || '').toLowerCase().trim();
-                                    const yaSalioDeCocina =
+                                    const estaLista =
                                       estadoLimpio === 'listo' || estadoLimpio === 'lista';
                                     const noEntregada =
                                       estadoDomiLimpio !== 'entregado' &&
                                       estadoDomiLimpio !== 'cancelado';
 
-                                    // 3. Sin domiciliario activo asignado (en cuanto se asigna, desaparece)
-                                    const domiIdNum = Number(o.domiciliario_id);
-                                    const tieneDomiActivo =
+                                    // 3. No mostrar si ya está asignada a ESTE mismo domiciliario
+                                    const yaAsignadaAEste =
                                       o.domiciliario_id !== null &&
                                       o.domiciliario_id !== undefined &&
                                       String(o.domiciliario_id).trim() !== '' &&
-                                      !Number.isNaN(domiIdNum) &&
-                                      domiIdNum > 0 &&
-                                      domiciliarios.some(
-                                        d =>
-                                          Number(d.id) === domiIdNum &&
-                                          (d.estado || '').toLowerCase() !== 'inhabilitado' &&
-                                          d.activo !== false
-                                      );
-
-                                    const sinAsignar = !tieneDomiActivo;
+                                      Number(o.domiciliario_id) === Number(domi.id);
 
                                     const termino = (busquedaOrdenDomi[domi.id] || '').toLowerCase().trim();
                                     const coincideBusq =
@@ -2650,7 +2640,7 @@ const eliminarZonaCobertura = async (id) => {
                                       String(o.id || '').toLowerCase().includes(termino) ||
                                       (o.cliente_nombre || '').toLowerCase().includes(termino);
 
-                                    return esDomi && yaSalioDeCocina && noEntregada && sinAsignar && coincideBusq;
+                                    return esDomi && estaLista && noEntregada && !yaAsignadaAEste && coincideBusq;
                                   })
                                   .sort((a, b) => Number(b.id) - Number(a.id))
                                   .map(ord => {
