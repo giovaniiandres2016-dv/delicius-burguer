@@ -2631,12 +2631,15 @@ const eliminarZonaCobertura = async (id) => {
                                     noEntregada &&
                                     (estadoLimpio.includes('list') || estadoLimpio.includes('camino'));
 
-                                    const sinAsignar =
-                                      o.domiciliario_id === null ||
-                                      o.domiciliario_id === undefined ||
-                                      String(o.domiciliario_id).trim() === '' ||
-                                      String(o.domiciliario_id).toLowerCase() === 'null' ||
-                                      Number(o.domiciliario_id) === 0;
+                                    const tieneDomiValido =
+                                      o.domiciliario_id !== null &&
+                                      o.domiciliario_id !== undefined &&
+                                      String(o.domiciliario_id).trim() !== '' &&
+                                      String(o.domiciliario_id).toLowerCase() !== 'null' &&
+                                      Number(o.domiciliario_id) > 0 &&
+                                      domiciliarios.some(d => Number(d.id) === Number(o.domiciliario_id));
+
+                                    const sinAsignar = !tieneDomiValido;
 
                                     const termino = (busquedaOrdenDomi[domi.id] || '').toLowerCase().trim();
                                     const coincideBusq =
