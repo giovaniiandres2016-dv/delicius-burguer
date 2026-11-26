@@ -745,13 +745,11 @@ const cargarDatosBD = async () => {
     }
 
     const domiIdNum = domiciliarioId ? Number(domiciliarioId) : null;
-    const domiSeleccionado = domiciliarios.find(d => d.id === domiIdNum);
-    const nombreDomiSnapshot = domiSeleccionado ? domiSeleccionado.nombre : null;
 
     setOrdenes(prev =>
       prev.map(o =>
         o.id === ordenId
-          ? { ...o, domiciliario_id: domiIdNum, domiciliario_nombre: nombreDomiSnapshot }
+          ? { ...o, domiciliario_id: domiIdNum }
           : o
       )
     );
@@ -760,8 +758,7 @@ const cargarDatosBD = async () => {
       const { error } = await supabase
         .from('ordenes')
         .update({
-          domiciliario_id: domiIdNum,
-          domiciliario_nombre: nombreDomiSnapshot
+          domiciliario_id: domiIdNum
         })
         .eq('id', ordenId);
 
